@@ -1,0 +1,101 @@
+.post-card {
+  background: linear-gradient(180deg, #FFFFFF, #FFFDF8);
+  border-radius: 20px;
+  overflow: hidden;
+  border: 2px solid #EEF3FF;
+  border-top: 4px solid #F5B62D;
+  box-shadow: 0 10px 24px rgba(17,38,76,.06);
+  margin-bottom: 24px;
+}
+
+.post-card img {
+  width: 100%;
+  height: auto;
+  display: block;
+  border-top: 1px solid #F3F6FC;
+}
+
+.post-card-author,
+.post-card-time,
+.post-card-title,
+.post-card-body,
+.post-card-engagement-count,
+.post-card-comments-link {
+  color: #0B1E4F;
+}
+
+.post-card-time {
+  color: #4B5D7A;
+  font-size: 12px;
+}
+
+.post-reactions-count {
+  padding: 12px 16px;
+  font-size: 14px;
+  color: #4B5D7A;
+  border-bottom: 1px solid #EEF3FF;
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.post-actions {
+  display: flex;
+  justify-content: space-around;
+  padding: 12px 0;
+  border-bottom: 1px solid #EEF3FF;
+  gap: 6px;
+}
+
+.post-action-btn {
+  flex: 1 1 0;
+  min-width: 72px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 8px;
+  font-size: 16px;
+  color: #0B1E4F;
+  border-radius: 10px;
+}
+
+.post-action-btn:hover {
+  background: #FFF8E5;
+}
+
+.post-engagement {
+  padding: 12px 16px;
+}
+
+.feed-layout.dark .post-card-author,
+.feed-layout.dark .post-card-time,
+.feed-layout.dark .post-card-title,
+.feed-layout.dark .post-card-body,
+.feed-layout.dark .post-card-engagement-count,
+.feed-layout.dark .post-card-comments-link,
+.feed-layout.dark .post-action-btn,
+.feed-layout.dark .post-reactions-count {
+  color: #F7F9FC;
+}
+
+.feed-layout.dark .post-action-btn:hover {
+  background: rgba(255,255,255,0.08);
+}
+
+/* Mobile adjustments */
+@media (max-width: 600px) {
+  .post-card { margin-bottom: 16px; }
+  .post-reactions-count { font-size: 14px; gap: 8px; }
+  .post-actions { gap: 4px; }
+  .post-engagement { font-size: 13px; }
+}
+
+/* Desktop tweak: make sure reaction modal overlay appears above everything */
+.reaction-modal-overlay {
+  z-index: 3000;
+}

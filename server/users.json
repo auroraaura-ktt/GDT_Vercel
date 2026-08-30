@@ -1,0 +1,25 @@
+{
+  "users": [
+    {
+      "id": "d0535862-4f12-490d-aa60-f83f244464ac",
+      "username": "admin",
+      "email": "admin@example.com",
+      "role": "admin",
+      "createdAt": "2026-06-23T09:03:18.349Z"
+    },
+    {
+      "id": "d475d313-8550-4bb9-a594-bfd82700ccc4",
+      "username": "testuser",
+      "email": "test@example.com",
+      "role": "user",
+      "createdAt": "2026-06-23T07:48:41.780Z"
+    },
+    {
+      "id": "962dcba8-6e1b-4b4a-bf5b-ca4e3bb37c98",
+      "username": "k",
+      "email": "kyawtheintun.m.4501@gmail.com",
+      "role": "user",
+      "createdAt": "2026-06-23T07:24:52.577Z"
+    }
+  ]
+}

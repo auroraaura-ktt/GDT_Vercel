@@ -1,0 +1,451 @@
+[
+  {
+    "id": "post-1787149042148",
+    "userId": "page-refresh-test",
+    "username": "Test Page",
+    "content": "Newer page post",
+    "image": null,
+    "createdAt": "2026-08-19T12:00:00.000Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1787149042146",
+    "userId": "page-refresh-test",
+    "username": "Test Page",
+    "content": "Older page post",
+    "image": null,
+    "createdAt": "2026-08-18T12:00:00.000Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1787149031073",
+    "userId": "page-refresh-test",
+    "username": "Test Page",
+    "content": "Newer page post",
+    "image": null,
+    "createdAt": "2026-08-19T12:00:00.000Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1787149031071",
+    "userId": "page-refresh-test",
+    "username": "Test Page",
+    "content": "Older page post",
+    "image": null,
+    "createdAt": "2026-08-18T12:00:00.000Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1787145421577,
+    "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+    "username": "Shine Wunna Tun",
+    "content": "HELLO",
+    "image": null,
+    "createdAt": "2026-08-19T13:17:01.577Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786377439760",
+    "userId": "d0535862-4f12-490d-aa60-f83f244464ac",
+    "username": "admin",
+    "content": "Hi Students, I love MIIT",
+    "image": null,
+    "createdAt": "2026-08-10T15:57:19.760Z",
+    "likes": 3,
+    "likedBy": [
+      {
+        "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+        "username": "Shine Wunna Tun"
+      },
+      {
+        "userId": "demo-user",
+        "username": "Demo"
+      },
+      {
+        "userId": "b44feffd-b583-42bf-9cee-a111f77b5090",
+        "username": "Minn Khant"
+      }
+    ],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786205533341",
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "",
+    "image": "/api/social/uploads/1786205533334-Screenshot_2026-07-18_113659.png",
+    "createdAt": "2026-08-08T16:12:13.341Z",
+    "likes": 0,
+    "likedBy": [],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786205433516",
+    "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+    "username": "Kyaw Thein Tun",
+    "content": "This is Test Photo!!!",
+    "image": "/api/social/uploads/1786205433512-ChatGPT_Image_Jun_10__2026__10_49_32_PM.png",
+    "createdAt": "2026-08-08T16:10:33.516Z",
+    "likes": 3,
+    "likedBy": [
+      {
+        "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+        "username": "Kyaw Thein Tun"
+      },
+      {
+        "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+        "username": "Shine Wunna Tun"
+      },
+      {
+        "userId": "5a641aee-7f5c-4269-b58d-fcfafaa08700",
+        "username": "Kyaw Thein Tun"
+      }
+    ],
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786204893773",
+    "userId": "5847df0b-2fd8-4b75-9fcb-6369960fae75",
+    "username": "MiitVerse Campus Social Communication",
+    "content": "We are now communicate as campus communication system. Welcome Back!!!",
+    "image": "/api/social/uploads/1786204893768-ChatGPT_Image_Jun_4__2026__08_22_55_PM.png",
+    "createdAt": "2026-08-08T16:01:33.773Z",
+    "likes": 1,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+        "username": "Kyaw Thein Tun"
+      }
+    ]
+  },
+  {
+    "id": "post-1786204469931",
+    "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+    "username": "Kyaw Thein Tun",
+    "content": "",
+    "image": "/api/social/uploads/1786204469927-Screenshot_2026-08-08_004208.png",
+    "createdAt": "2026-08-08T15:54:29.931Z",
+    "likes": 3,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+        "username": "Kyaw Thein Tun"
+      },
+      {
+        "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+        "username": "Shine Wunna Tun"
+      },
+      {
+        "userId": "5a641aee-7f5c-4269-b58d-fcfafaa08700",
+        "username": "Kyaw Thein Tun"
+      }
+    ]
+  },
+  {
+    "id": "post-1786200096872",
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "",
+    "image": null,
+    "createdAt": "2026-08-08T14:41:36.872Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786200016000",
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "",
+    "image": null,
+    "createdAt": "2026-08-08T14:40:16.000Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786199571992",
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "",
+    "image": null,
+    "createdAt": "2026-08-08T14:32:51.992Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786199397875,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "s",
+    "image": null,
+    "createdAt": "2026-08-08T14:29:57.875Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786171292643,
+    "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+    "username": "Shine Wunna Tun",
+    "content": "gg",
+    "image": null,
+    "createdAt": "2026-08-08T06:41:32.643Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786171249594,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "Kyaw Lin",
+    "content": "a",
+    "image": null,
+    "createdAt": "2026-08-08T06:40:49.594Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "post-1786171110358",
+    "userId": "demo",
+    "username": "myrealname",
+    "content": "test",
+    "image": null,
+    "createdAt": "2026-08-08T06:38:30.358Z",
+    "likes": 1,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "a32a16f2-7770-4bcf-b900-523298e01a68",
+        "username": "Kyaw Thein Tun"
+      }
+    ]
+  },
+  {
+    "id": 1786170892101,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "j",
+    "image": null,
+    "createdAt": "2026-08-08T06:34:52.101Z",
+    "likes": 1,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "b44feffd-b583-42bf-9cee-a111f77b5090",
+        "username": "Minn Khant"
+      }
+    ]
+  },
+  {
+    "id": 1786170670779,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "a",
+    "image": null,
+    "createdAt": "2026-08-08T06:31:10.779Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786170482507,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "he",
+    "image": null,
+    "createdAt": "2026-08-08T06:28:02.507Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": []
+  },
+  {
+    "id": 1786170472002,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "hi",
+    "image": null,
+    "createdAt": "2026-08-08T06:27:52.002Z",
+    "likes": 1,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "b44feffd-b583-42bf-9cee-a111f77b5090",
+        "username": "Minn Khant"
+      }
+    ]
+  },
+  {
+    "id": 1786170399101,
+    "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+    "username": "MiitVerse member",
+    "content": "hi",
+    "image": null,
+    "createdAt": "2026-08-08T06:26:39.101Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786168368307,
+    "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+    "username": "MiitVerse member",
+    "content": "hi",
+    "image": null,
+    "createdAt": "2026-08-08T05:52:48.307Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786168328614,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "hello",
+    "image": null,
+    "createdAt": "2026-08-08T05:52:08.614Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": 1786168311770,
+    "userId": "c6e379a8-e35f-404d-b850-7e4b4bca8e40",
+    "username": "MiitVerse member",
+    "content": "hi",
+    "image": null,
+    "createdAt": "2026-08-08T05:51:51.770Z",
+    "likes": 1,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+        "username": "Shine Wunna Tun"
+      }
+    ]
+  },
+  {
+    "id": "post-1786167005662",
+    "userId": "acct-123",
+    "username": "Alice",
+    "content": "hello from api",
+    "image": null,
+    "createdAt": "2026-08-08T05:30:05.662Z",
+    "likes": 2,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public",
+    "likedBy": [
+      {
+        "userId": "40f6a193-5632-4db5-993b-a069552387a4",
+        "username": "Shine Wunna Tun"
+      },
+      {
+        "userId": "b44feffd-b583-42bf-9cee-a111f77b5090",
+        "username": "Minn Khant"
+      }
+    ]
+  },
+  {
+    "id": "post-1786166607546",
+    "userId": "test-user",
+    "username": "Tester",
+    "content": "hello",
+    "image": null,
+    "createdAt": "2026-08-08T05:23:27.546Z",
+    "likes": 0,
+    "comments": [],
+    "reposts": 0,
+    "visibility": "public"
+  },
+  {
+    "id": "sample-public-3",
+    "userId": "sara",
+    "username": "Sara",
+    "content": "Public posts make it easy to discover fresh conversations from the wider community.",
+    "image": null,
+    "createdAt": "2026-08-07T06:31:25.037Z",
+    "likes": 9,
+    "comments": [],
+    "reposts": 2,
+    "visibility": "public"
+  },
+  {
+    "id": "sample-public-2",
+    "userId": "aung",
+    "username": "Aung",
+    "content": "New creators are joining every day. Follow the people you want to see more from.",
+    "image": null,
+    "createdAt": "2026-08-07T06:31:25.037Z",
+    "likes": 11,
+    "comments": [],
+    "reposts": 1,
+    "visibility": "public"
+  },
+  {
+    "id": "sample-public-1",
+    "userId": "miitverse",
+    "username": "MiitVerse",
+    "content": "Welcome to the public community feed. Share updates, stories, and ideas with everyone.",
+    "image": null,
+    "createdAt": "2026-08-07T06:31:25.036Z",
+    "likes": 18,
+    "comments": [],
+    "reposts": 3,
+    "visibility": "public"
+  }
+]

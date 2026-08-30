@@ -1,0 +1,26 @@
+node_modules
+server/node_modules
+venv
+dist
+.git
+.dockerignore
+docker-compose.override.yml
+npm-debug.log*
+yarn-error.log*
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/env/
+**/.env
+**/.env.local
+**/.env.*.local
+**/.DS_Store
+**/docker/*.log
+
+# ── Secrets: never copy into the Docker image ──────────────
+**/atlas-credentials.env
+**/atlas-credentials.json
+
+# ── Runtime-only data: large user uploads (stateless container) ──
+server/data/uploads/
