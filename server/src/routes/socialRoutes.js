@@ -65,15 +65,37 @@ router.get('/posts', authMiddleware, async (req, res) => {
 
   const following = getSocialFollows(req.user.id);
   let pagePostUserIds = []
+  const pageFullNames = new Map()
 
   try {
     const pages = await listPageRecords()
     pagePostUserIds = (pages || []).map((page) => page.ownerId || page.id).filter(Boolean)
+
+    // Reuse the already-loaded page records (read-only) to map a page account's
+    // userId to its display (full) name so the feed can show the page's name.
+    for (const page of pages || []) {
+      if (!page?.pageName) continue
+      const keys = [page.id, page.ownerId].filter((value) => value != null && value !== '')
+      for (const key of keys) {
+        const normalizedKey = String(key)
+        if (!pageFullNames.has(normalizedKey)) {
+          pageFullNames.set(normalizedKey, page.pageName)
+        }
+      }
+    }
   } catch (error) {
     console.error('Failed to load page records for feed ordering:', error.message)
   }
 
-  const posts = listSocialPosts(req.user.id, following, { pagePostUserIds });
+  const posts = (listSocialPosts(req.user.id, following, { pagePostUserIds }) || []).map((post) => {
+    if (!post) return post
+    const pageName = pageFullNames.get(String(post.userId))
+    // Page account posts show their full page name on the feed.
+    if (pageName) {
+      return { ...post, source: 'page', pageName, author: pageName, username: pageName }
+    }
+    return post
+  });
   res.json({ posts });
 });
 
