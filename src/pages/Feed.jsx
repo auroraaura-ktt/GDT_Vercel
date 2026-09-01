@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useAuth } from '../context/useAuth'
 import BottomNav from "../components/BottomNav"
 import LeftSidebar from "../components/LeftSidebar"
@@ -41,9 +41,20 @@ export default function Feed() {
   const [posts, setPosts] = useState([])
   const [following, setFollowing] = useState([])
   const [isLoading, setIsLoading] = useState(true)
+  const [refreshSeed, setRefreshSeed] = useState(0)
+  const lastFetchedPostsRef = useRef([])
 
-  const loadFeedData = useCallback(async () => {
+  const FEED_POST_LIMIT = 8
+
+  const loadFeedData = useCallback(async ({ scrollToTop = false } = {}) => {
     setIsLoading(true)
+
+    if (scrollToTop) {
+      setRefreshSeed((seed) => seed + 1)
+      window.scrollTo({ top: 0, behavior: 'smooth' })
+      const feedCenter = document.querySelector('.feed-center')
+      if (feedCenter) feedCenter.scrollTo({ top: 0, behavior: 'smooth' })
+    }
 
     try {
       const savedFollowing = localStorage.getItem("feed-following")
@@ -82,6 +93,7 @@ export default function Feed() {
       setPosts(serverPosts || [])
       setFollowing(serverFollowing || [])
       localStorage.setItem("feed-following", JSON.stringify(serverFollowing || []))
+      lastFetchedPostsRef.current = serverPosts || []
     } catch (error) {
       console.error("Failed to load feed posts:", error)
     } finally {
@@ -204,10 +216,18 @@ export default function Feed() {
     }
   }
 
-  const visiblePosts = useMemo(
-    () => getVisiblePosts(posts, user?.id ?? null, following),
-    [posts, user?.id, following]
-  )
+  const visiblePosts = useMemo(() => {
+    const allVisible = getVisiblePosts(posts, user?.id ?? null, following)
+
+    // Keep exactly 8 posts on the feed; rotate the selection on each refresh
+    if (allVisible.length > FEED_POST_LIMIT) {
+      const seed = refreshSeed % allVisible.length
+      const rotated = [...allVisible.slice(seed), ...allVisible.slice(0, seed)]
+      return rotated.slice(0, FEED_POST_LIMIT)
+    }
+
+    return allVisible
+  }, [posts, user?.id, following, refreshSeed])
 
   return (
     <div className={`feed-layout ${darkMode ? "dark" : ""}`}>
@@ -237,7 +257,7 @@ export default function Feed() {
         onFollowToggle={handleFollowToggle}
         darkMode={darkMode}
         setDarkMode={setDarkMode}
-        onRefresh={loadFeedData}
+        onRefresh={() => loadFeedData({ scrollToTop: true })}
       />
       <BottomNav />
     </div>

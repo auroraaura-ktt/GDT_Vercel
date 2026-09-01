@@ -66,7 +66,7 @@ function buildMongoUri() {
 
 export const env = {
   port: Number(process.env.PORT || 3001),
-  clientOrigin: process.env.CLIENT_ORIGIN || 'https://miitverse.onrender.com',
+  clientOrigin: process.env.CLIENT_ORIGIN || 'https://miitverse-xi.vercel.app',
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   // SendGrid API key for email service
   sendgridApiKey: process.env.SENDGRID_API_KEY || '',

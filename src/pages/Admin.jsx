@@ -58,6 +58,29 @@ export default function Admin() {
   const [inviteMessage, setInviteMessage] = useState({ type: '', text: '' })
   const [inviteResults, setInviteResults] = useState(null)
   const [inviting, setInviting] = useState(false)
+  const [inviteHistory, setInviteHistory] = useState([])
+  const [loadingInviteHistory, setLoadingInviteHistory] = useState(false)
+  const [inviteHistoryError, setInviteHistoryError] = useState('')
+
+  const loadInviteHistory = useCallback(async () => {
+    setLoadingInviteHistory(true)
+    setInviteHistoryError('')
+    try {
+      const data = await apiRequest('/auth/invitations/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setInviteHistory(data.history || [])
+    } catch (err) {
+      setInviteHistoryError(err.message || 'Failed to load invitation history')
+    } finally {
+      setLoadingInviteHistory(false)
+    }
+  }, [token])
+
+  const [usersTab, setUsersTab] = useState('regular') // regular | admin
+  const [updatingVerified, setUpdatingVerified] = useState(false)
+  const [updatingPageVerified, setUpdatingPageVerified] = useState(null)
+  const [selectedPage, setSelectedPage] = useState(null)
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true)
@@ -134,7 +157,7 @@ export default function Admin() {
 
     const emails = inviteEmails
       .split(/[,\n;]+/)
-      .map((email) => email.trim())
+      .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
 
     if (emails.length === 0) {
@@ -162,6 +185,7 @@ export default function Admin() {
       setInviteResults(data)
       if (data.invited.length > 0) {
         setInviteEmails('')
+        loadInviteHistory()
       }
     } catch (err) {
       setInviteMessage({
@@ -361,6 +385,58 @@ export default function Admin() {
     }
   }
 
+  const handleToggleVerified = async () => {
+    if (!selectedUser) return
+    const nextVerified = !selectedUser.verified
+    setUpdatingVerified(true)
+    setUserActionMessage({ type: '', text: '' })
+    try {
+      const data = await apiRequest(`/users/${encodeURIComponent(selectedUser.id)}/verified`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ verified: nextVerified }),
+      })
+      const updatedUser = { ...selectedUser, ...data.user }
+      setSelectedUser(updatedUser)
+      setUsers((currentUsers) => currentUsers.map((item) => item.id === updatedUser.id ? { ...item, ...updatedUser } : item))
+      setUserActionMessage({ type: 'success', text: data.message })
+    } catch (err) {
+      setUserActionMessage({ type: 'error', text: err.message || 'Failed to update blue mark status' })
+    } finally {
+      setUpdatingVerified(false)
+    }
+  }
+
+  const handleTogglePageVerified = async (pageItem) => {
+    const nextVerified = pageItem.verified === false
+    setUpdatingPageVerified(pageItem.id)
+    setPageAccountMessage({ type: '', text: '' })
+    try {
+      const data = await apiRequest(`/auth/pages/${encodeURIComponent(pageItem.id)}/verified`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ verified: nextVerified }),
+      })
+      const updatedPage = { ...pageItem, verified: data.page?.verified ?? nextVerified }
+      setPages((currentPages) => currentPages.map((item) => item.id === updatedPage.id ? { ...item, ...updatedPage } : item))
+      if (selectedPage?.id === updatedPage.id) {
+        setSelectedPage(updatedPage)
+      }
+      setPageAccountMessage({ type: 'success', text: data.message })
+    } catch (err) {
+      setPageAccountMessage({ type: 'error', text: err.message || 'Failed to update page blue mark' })
+    } finally {
+      setUpdatingPageVerified(null)
+    }
+  }
+
+  const openPageDetails = (pageItem) => {
+    setSelectedPage(pageItem)
+    setPageAccountMessage({ type: '', text: '' })
+    setActiveSection('page-details')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const requestUserSuspension = () => {
     if (!selectedUser || selectedUser.id === user?.id) return
     setUserConfirmation({
@@ -457,6 +533,8 @@ export default function Admin() {
   }
 
   const newestUsers = users.slice(0, 6)
+  const regularUsers = users.filter((userItem) => userItem.role !== 'admin')
+  const adminUsers = users.filter((userItem) => userItem.role === 'admin')
 
   useEffect(() => {
     if (activeSection === 'users') {
@@ -466,10 +544,18 @@ export default function Admin() {
     if (activeSection === 'page-accounts') {
       loadPages()
     }
+    if (activeSection === 'invitations') {
+      loadInviteHistory()
+    }
     if (activeSection === 'posts') {
       loadAllPosts()
     }
-  }, [activeSection, loadUsers, loadPages])
+    if (activeSection === 'dashboard') {
+      loadUsers()
+      loadPages({ reportError: false })
+      loadAllPosts()
+    }
+  }, [activeSection, loadUsers, loadPages, loadInviteHistory])
 
   const sidebarItems = [
     { key: 'dashboard', label: '📊 Dashboard' },
@@ -488,6 +574,7 @@ export default function Admin() {
     invitations: 'Invitations',
     reports: 'Reports',
     'user-details': 'User Details',
+    'page-details': 'Page Account Details',
   }
 
   const pageDescriptions = {
@@ -498,6 +585,7 @@ export default function Admin() {
     invitations: 'Invite users via email and send a registration link.',
     reports: 'Review flagged reports and moderation tasks.',
     'user-details': 'Review account information and complete management actions.',
+    'page-details': 'Manage this page account, its blue mark and dashboard access.',
   }
 
   const goToSection = (key) => {
@@ -516,46 +604,106 @@ export default function Admin() {
                 <p>Load and manage all registered accounts from this page.</p>
               </div>
 
-              {loadingUsers && <p>Loading users...</p>}
-              {error && <p className="error-text">{error}</p>}
+              <div className="admin-users-tabs">
+                <button
+                  type="button"
+                  className={`admin-users-tab ${usersTab === 'regular' ? 'active' : ''}`}
+                  onClick={() => setUsersTab('regular')}
+                >
+                  👤 Regular Users ({regularUsers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`admin-users-tab ${usersTab === 'admin' ? 'active' : ''}`}
+                  onClick={() => setUsersTab('admin')}
+                >
+                  🛡 Admin Accounts ({adminUsers.length})
+                </button>
+                <button type="button" className="admin-users-refresh" onClick={() => loadUsers()}>↻ Refresh</button>
+              </div>
 
-              {!loadingUsers && users.length === 0 && !error && (
-                <p>No users loaded yet. Use the sidebar to refresh this view.</p>
+              {usersTab === 'regular' && (
+                <>
+                  {loadingUsers && <p>Loading users...</p>}
+                  {error && <p className="error-text">{error}</p>}
+
+                  {!loadingUsers && regularUsers.length === 0 && !error && (
+                    <p>No regular user accounts found yet.</p>
+                  )}
+
+                  {regularUsers.length > 0 && (
+                    <div className="admin-users-table-wrap">
+                      <table className="admin-users-table">
+                        <thead>
+                          <tr>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Blue Mark</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {regularUsers.map((userItem) => (
+                            <tr key={userItem.id}>
+                              <td>{userItem.fullName || userItem.username}</td>
+                              <td>{userItem.email}</td>
+                              <td>{userItem.role}</td>
+                              <td>
+                                {userItem.verified
+                                  ? <span className="admin-verified-badge" title="Blue mark enabled">✔ Verified</span>
+                                  : <span className="admin-unverified-badge" title="Blue mark disabled">— None</span>}
+                              </td>
+                              <td>
+                                <span className={`admin-status-badge ${userItem.suspended ? 'suspended' : 'active'}`}>
+                                  {userItem.suspended ? 'Suspended' : 'Active'}
+                                </span>
+                              </td>
+                              <td>{new Date(userItem.createdAt).toLocaleString()}</td>
+                              <td className="admin-action-cell">
+                                <button
+                                  type="button"
+                                  className="admin-more-actions-btn"
+                                  onClick={() => openUserDetails(userItem)}
+                                >
+                                  More actions →
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
 
-              {users.length > 0 && (
-                <div className="admin-users-table-wrap">
-                  <table className="admin-users-table">
-                    <thead>
-                      <tr>
-                        <th>Full Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Created At</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((userItem) => (
-                        <tr key={userItem.id}>
-                          <td>{userItem.fullName || userItem.username}</td>
-                          <td>{userItem.email}</td>
-                          <td>{userItem.role}</td>
-                          <td>{new Date(userItem.createdAt).toLocaleString()}</td>
-                          <td className="admin-action-cell">
-                            <button
-                              type="button"
-                              className="admin-more-actions-btn"
-                              onClick={() => openUserDetails(userItem)}
-                            >
-                              More actions →
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                            {usersTab === 'admin' && (
+                <>
+                  {adminUsers.length === 0 && (<p>No admin accounts found.</p>)}
+                  {adminUsers.length > 0 && (
+                    <div className="admin-users-table-wrap">
+                      <table className="admin-users-table">
+                        <thead><tr><th>Full Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created At</th><th>Action</th></tr></thead>
+                        <tbody>
+                          {adminUsers.map((userItem) => (
+                            <tr key={userItem.id}>
+                              <td>{userItem.fullName || userItem.username}</td>
+                              <td>{userItem.email}</td>
+                              <td>{userItem.role}</td>
+                              <td><span className={`admin-status-badge ${userItem.suspended ? 'suspended' : 'active'}`}>{userItem.suspended ? 'Suspended' : 'Active'}</span></td>
+                              <td>{new Date(userItem.createdAt).toLocaleString()}</td>
+                              <td className="admin-action-cell"><button type="button" className="admin-more-actions-btn" onClick={() => openUserDetails(userItem)}>More actions →</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="admin-page-note">🌐 Page accounts are managed in the Page Accounts section.</p>
+                </>
               )}
             </section>
           </>
@@ -584,7 +732,7 @@ export default function Admin() {
                 <p className="admin-eyebrow">ACCOUNT PROFILE</p>
                 <h2>{displayName}</h2>
                 <p>{selectedUser.email}</p>
-                <div className="admin-user-badges"><span className="admin-role-badge">{selectedUser.role || 'user'}</span><span className={`admin-status-badge ${selectedUser.suspended ? 'suspended' : 'active'}`}>{selectedUser.suspended ? 'Suspended' : 'Active'}</span></div>
+                <div className="admin-user-badges"><span className="admin-role-badge">{selectedUser.role || 'user'}</span><span className={`admin-status-badge ${selectedUser.suspended ? 'suspended' : 'active'}`}>{selectedUser.suspended ? 'Suspended' : 'Active'}</span>{selectedUser.verified && <span className="admin-verified-badge">✔ Blue Mark</span>}</div>
               </div>
             </div>
 
@@ -608,9 +756,76 @@ export default function Admin() {
                 <h3>Manage this account</h3>
                 <p>Actions take effect immediately. Use suspension to block sign-in without removing account data.</p>
                 <button type="button" className="admin-reset-btn" onClick={() => setResetPasswordUserId(selectedUser.id)}>Reset password</button>
+                {selectedUser.role !== 'admin' && (
+                  <button type="button" className={`admin-verified-btn ${selectedUser.verified ? 'enabled' : ''}`} disabled={updatingVerified} onClick={handleToggleVerified}>{updatingVerified ? 'Updating…' : selectedUser.verified ? 'Disable Blue Mark' : 'Enable Blue Mark'}</button>
+                )}
+                {selectedUser.role === 'admin' && <small>Admin accounts cannot receive a blue mark.</small>}
                 <button type="button" className="admin-suspend-btn" disabled={isCurrentAdmin || updatingUserStatus} onClick={requestUserSuspension}>{updatingUserStatus ? 'Updating…' : selectedUser.suspended ? 'Restore account' : 'Suspend account'}</button>
                 <button type="button" className="admin-delete-btn" disabled={isCurrentAdmin} onClick={requestUserDeletion}>Delete account</button>
                 {isCurrentAdmin && <small>You cannot suspend or delete your own admin account.</small>}
+              </section>
+            </div>
+          </section>
+        )
+      }
+      case 'page-details': {
+        if (!selectedPage) {
+          return (
+            <section className="admin-user-details-empty">
+              <h2>No page account selected</h2>
+              <p>Choose a page account from the Page Accounts section to view its details.</p>
+              <button type="button" className="admin-more-actions-btn" onClick={() => goToSection('page-accounts')}>Go to Page Accounts</button>
+            </section>
+          )
+        }
+
+        const pageDisplayName = selectedPage.pageName || 'MiitVerse page'
+        const pageInitials = pageDisplayName.split(' ').filter(Boolean).map((part) => part[0]?.toUpperCase()).join('').slice(0, 2) || 'P'
+
+        return (
+          <section className="admin-user-details">
+            <button type="button" className="admin-back-button" onClick={() => goToSection('page-accounts')}>← Back to Page Accounts</button>
+            <div className="admin-user-profile-card">
+              <div className="admin-user-avatar">{pageInitials}</div>
+              <div className="admin-user-profile-copy">
+                <p className="admin-eyebrow">PAGE ACCOUNT PROFILE</p>
+                <h2>{pageDisplayName} {selectedPage.verified === false ? <span className="admin-unverified-badge">— No Blue Mark</span> : <span className="admin-verified-badge">✔ Blue Mark</span>}</h2>
+                <p>{selectedPage.email}</p>
+                <div className="admin-user-badges"><span className="admin-role-badge">{selectedPage.role || 'page'}</span></div>
+              </div>
+            </div>
+
+            {pageAccountMessage.text && <p className={`message message-${pageAccountMessage.type}`}>{pageAccountMessage.text}</p>}
+
+            <div className="admin-user-details-grid">
+              <section className="admin-user-info-card">
+                <p className="admin-eyebrow">ACCOUNT INFORMATION</p>
+                <h3>Details</h3>
+                <dl>
+                  <div><dt>Page name</dt><dd>{pageDisplayName}</dd></div>
+                  <div><dt>Email address</dt><dd>{selectedPage.email}</dd></div>
+                  <div><dt>Page slug</dt><dd>{selectedPage.slug || '—'}</dd></div>
+                  <div><dt>Owner account</dt><dd>{selectedPage.ownerId || 'Not linked'}</dd></div>
+                  <div><dt>Created</dt><dd>{selectedPage.createdAt ? new Date(selectedPage.createdAt).toLocaleString() : 'Not available'}</dd></div>
+                  <div><dt>Account ID</dt><dd className="admin-user-id">{selectedPage.id}</dd></div>
+                </dl>
+              </section>
+
+              <section className="admin-user-actions-card">
+                <p className="admin-eyebrow">ADMIN ACTIONS</p>
+                <h3>Manage this page account</h3>
+                <p>Actions take effect immediately. The blue mark controls the verified badge shown next to this page's name and posts.</p>
+                <button
+                  type="button"
+                  className={`admin-verified-btn ${selectedPage.verified !== false ? 'enabled' : ''}`}
+                  disabled={updatingPageVerified === selectedPage.id}
+                  onClick={() => handleTogglePageVerified(selectedPage)}
+                >
+                  {updatingPageVerified === selectedPage.id ? 'Updating…' : selectedPage.verified === false ? 'Enable Blue Mark' : 'Disable Blue Mark'}
+                </button>
+                <button type="button" className="admin-reset-btn" onClick={() => setResetPasswordUserId(selectedPage.ownerId || selectedPage.id)}>Reset password</button>
+                <a className="admin-button" href={`/page/${selectedPage.slug}`}>Open Dashboard</a>
+                <small>Posts published from this page's dashboard appear under "{pageDisplayName}", never under the admin account.</small>
               </section>
             </div>
           </section>
@@ -683,21 +898,18 @@ export default function Admin() {
                   {pages.map((pageItem) => (
                     <div className="admin-page-card" key={pageItem.id}>
                       <div>
-                        <h4>{pageItem.pageName}</h4>
+                        <h4>{pageItem.pageName} {pageItem.verified === false ? <span className="admin-unverified-badge" title="Blue mark disabled">— No Blue Mark</span> : <span className="admin-verified-badge" title="Blue mark enabled">✔ Blue Mark</span>}</h4>
                         <p>{pageItem.email}</p>
                       </div>
                       <div className="admin-page-card-actions">
                         <span className="admin-page-badge">{pageItem.role || 'page'}</span>
                         <button
                           type="button"
-                          className="admin-reset-btn"
-                          onClick={() => setResetPasswordUserId(pageItem.ownerId || pageItem.id)}
+                          className="admin-more-actions-btn"
+                          onClick={() => openPageDetails(pageItem)}
                         >
-                          Reset Password
+                          More actions →
                         </button>
-                        <a className="admin-button" href={`/page/${pageItem.slug}`}>
-                          Open Dashboard
-                        </a>
                       </div>
                     </div>
                   ))}
@@ -722,23 +934,10 @@ export default function Admin() {
               <button type="button" onClick={() => loadAllPosts()} style={{ marginLeft: '12px' }}>Refresh</button>
             </div>
 
-            <form className="admin-create-form" onSubmit={handleCreateTestPost} style={{ marginBottom: '20px' }}>
-              <h3>Create post</h3>
-              {testPostMessage.text && <p className={`message message-${testPostMessage.type}`}>{testPostMessage.text}</p>}
-              <div className="form-group">
-                <label htmlFor="postAuthor">Display name (optional)</label>
-                <input id="postAuthor" name="author" value={testPostData.author} onChange={handleTestPostChange} disabled={creatingTestPost} />
-              </div>
-              <div className="form-group">
-                <label htmlFor="postContent">Content</label>
-                <textarea id="postContent" name="content" value={testPostData.content} onChange={handleTestPostChange} disabled={creatingTestPost} required />
-              </div>
-              <div className="form-group">
-                <label htmlFor="postImage">Image URL (optional)</label>
-                <input id="postImage" name="image" type="url" value={testPostData.image} onChange={handleTestPostChange} disabled={creatingTestPost} />
-              </div>
-              <button type="submit" disabled={creatingTestPost}>{creatingTestPost ? 'Saving…' : 'Publish post'}</button>
-            </form>
+            <div className="admin-invite-link" style={{ marginBottom: '20px' }}>
+              <strong>Note:</strong>
+              <span>Admin accounts cannot publish posts. To publish, open a page account's dashboard from the Page Accounts section — posts are published under the page's full name.</span>
+            </div>
 
             {loadingPosts && <p>Loading posts...</p>}
 
@@ -783,6 +982,11 @@ export default function Admin() {
                 <h2>Send Invitations</h2>
                 <p>Invite MIIT users by entering one or more email addresses. Each invite includes a registration link with an embedded action button.</p>
               </div>
+            </div>
+
+            <div className="admin-invite-link">
+              <strong>Invitation Link:</strong>
+              <a href="https://miitverse-xi.vercel.app/register" target="_blank" rel="noreferrer">https://miitverse-xi.vercel.app</a>
             </div>
 
             {inviteMessage.text && (
@@ -834,6 +1038,57 @@ export default function Admin() {
                 )}
               </div>
             )}
+
+            <div className="admin-invite-history" style={{ marginTop: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ margin: 0 }}>📨 Invitation Delivery History</h3>
+                <button type="button" className="admin-users-refresh" onClick={() => loadInviteHistory()}>↻ Refresh</button>
+              </div>
+
+              {loadingInviteHistory && <p>Loading invitation history...</p>}
+              {inviteHistoryError && <p className="error-text">{inviteHistoryError}</p>}
+
+              {!loadingInviteHistory && !inviteHistoryError && inviteHistory.length === 0 && (
+                <p>No invitations have been sent yet.</p>
+              )}
+
+              {!loadingInviteHistory && inviteHistory.length > 0 && (
+                <div className="admin-users-table-wrap">
+                  <table className="admin-users-table">
+                    <thead>
+                      <tr>
+                        <th>Invited To</th>
+                        <th>Subject</th>
+                        <th>Delivery Status</th>
+                        <th>Last Event At</th>
+                        <th>Opens</th>
+                        <th>Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inviteHistory.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.to}</td>
+                          <td>{item.subject}</td>
+                          <td>
+                            <span className={`admin-status-badge ${item.status === 'delivered' ? 'active' : item.status === 'delivered_as_expected' ? 'active' : 'suspended'}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td>{item.lastEventTime ? new Date(item.lastEventTime).toLocaleString() : '—'}</td>
+                          <td>{item.opensCount}</td>
+                          <td>{item.clicksCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <small style={{ display: 'block', marginTop: '10px', color: '#6b7280' }}>
+                Delivery data comes from the email provider (SendGrid). "Delivered" means the email reached the recipient's mail server — if it can't be found in the inbox, ask the recipient to check their Junk/Spam folder.
+              </small>
+            </div>
           </section>
         )
       case 'reports':
@@ -913,21 +1168,35 @@ export default function Admin() {
             <section id="dashboard" className="stats-grid">
               <div className="stat-card">
                 <h3>👥 Users</h3>
-                <h2>{users.length || 12540}</h2>
-                <p>+8% this month</p>
+                <h2>{users.length}</h2>
+                <p>Regular registered users</p>
+              </div>
+
+              <div className="stat-card">
+                <h3>🌐 Page Accounts</h3>
+                <h2>{pages.length}</h2>
+                <p>Official MIIT pages</p>
               </div>
 
               <div className="stat-card">
                 <h3>📝 Posts</h3>
-                <h2>48,221</h2>
-                <p>+15% this month</p>
+                <h2>{postsList.length}</h2>
+                <p>User &amp; page posts</p>
               </div>
 
               <div className="stat-card">
-                <h3>� Reports</h3>
-                <h2>18</h2>
-                <p>Needs review</p>
+                <h3>🚩 Reports</h3>
+                <h2>{reportRows.length}</h2>
+                <p>{reportRows.filter((r) => r.status !== 'Resolved').length} need review</p>
               </div>
+            </section>
+
+            <section className="dashboard-quick-actions">
+              <button type="button" onClick={() => goToSection('users')}>👥 Manage Users</button>
+              <button type="button" onClick={() => goToSection('page-accounts')}>🌐 Page Accounts</button>
+              <button type="button" onClick={() => goToSection('posts')}>📝 Posts</button>
+              <button type="button" onClick={() => goToSection('invitations')}>✉ Send Invitations</button>
+              <button type="button" onClick={() => goToSection('reports')}>🚩 Reports</button>
             </section>
 
             <section className="dashboard-grid">

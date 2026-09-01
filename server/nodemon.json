@@ -1,0 +1,5 @@
+{
+  "watch": ["src", ".env", "atlas-credentials.env", "package.json"],
+  "ignore": ["data/**", "node_modules/**", "src/**/*.test.js", "**/*.test.js", "**/*.map"],
+  "delay": "250"
+}

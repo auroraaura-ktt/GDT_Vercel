@@ -22,6 +22,7 @@ export default function PostCard({ post = {}, onPostUpdated }) {
   const {
     id = "default",
     username = post.author || post.username || "",
+    pageName = null,
     profilePicture = null,
     content = "The latest community update is ready.",
     image = null,
@@ -100,7 +101,9 @@ export default function PostCard({ post = {}, onPostUpdated }) {
     setShowReactionModal(true);
   };
 
-  const displayName = typeof username === "string" && username.trim() ? username.trim() : "User";
+  // Page posts carry their full page name; fall back to the regular username.
+  const authorLabel = pageName || username;
+  const displayName = typeof authorLabel === "string" && authorLabel.trim() ? authorLabel.trim() : "User";
 
   const initials = displayName
     .split(" ")
@@ -348,7 +351,7 @@ export default function PostCard({ post = {}, onPostUpdated }) {
               marginBottom: "8px",
             }}
           >
-            <strong>{username}</strong> {verified && <VerifiedBadge size="small" />} {content.substring(0, 80)}
+            <strong>{displayName}</strong> {verified && <VerifiedBadge size="small" />} {content.substring(0, 80)}
             {content.length > 80 ? "..." : ""}
           </p>
 

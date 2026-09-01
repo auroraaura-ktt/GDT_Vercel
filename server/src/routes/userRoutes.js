@@ -7,6 +7,7 @@ import {
   listUsers,
   resetPassword,
   setUserSuspension,
+  setUserVerified,
   updateCurrentUser,
   updateCurrentPassword,
   updateCurrentAvatar,
@@ -38,6 +39,7 @@ router.patch('/me/password', authMiddleware, updateCurrentPassword)
 router.get('/', authMiddleware, requireRole('admin', 'moderator'), listUsers)
 router.post('/reset-password', authMiddleware, requireRole('admin'), resetPassword)
 router.patch('/:id/suspension', authMiddleware, requireRole('admin'), setUserSuspension)
+router.patch('/:id/verified', authMiddleware, requireRole('admin'), setUserVerified)
 router.delete('/:id', authMiddleware, requireRole('admin'), deleteUser)
 
 export default router

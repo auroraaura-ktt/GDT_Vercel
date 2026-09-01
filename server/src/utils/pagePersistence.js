@@ -104,3 +104,13 @@ export async function getPageRecordByOwner(ownerId) {
   if (!ownerId) return null
   return PageModel.findOne({ ownerId: String(ownerId) }).lean()
 }
+
+export async function setPageVerified(id, verified) {
+  const target = String(id || '')
+  if (!target) return null
+  return PageModel.findOneAndUpdate(
+    { $or: [{ id: target }, { ownerId: target }] },
+    { $set: { verified: Boolean(verified) } },
+    { returnDocument: 'after' }
+  ).lean()
+}

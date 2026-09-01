@@ -88,6 +88,11 @@ export default function PageDashboard() {
       if (imageFile) {
         formData.append('image', imageFile)
       }
+      // Admins publish on behalf of this page so the post is attributed to the
+      // page account (its full page name), never to the admin.
+      if (user?.role === 'admin') {
+        formData.append('onBehalfOfPageId', page.id)
+      }
 
       const data = await apiRequest('/social/posts', {
         method: 'POST',

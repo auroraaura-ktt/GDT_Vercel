@@ -2785,3 +2785,15 @@ body::-webkit-scrollbar {
     font-size: 16px;
   }
 }
+/* FEED: hide scrollbar but keep scrolling */
+.feed-layout,
+.feed-center,
+.feed-center::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+.feed-center::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none; /* Chrome/Safari */
+}

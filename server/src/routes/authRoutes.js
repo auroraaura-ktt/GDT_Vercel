@@ -1,10 +1,11 @@
 import { Router } from 'express'
 
 import { createPageAccount, loginUser, registerUser, resendVerificationCode, sendInvitations, verifyUser } from '../controllers/authController.js'
-import { createPageRecord, getPageRecordBySlug, getPageRecordByOwner, listPageRecords } from '../utils/pagePersistence.js'
+import { createPageRecord, getPageRecordBySlug, getPageRecordByOwner, listPageRecords, setPageVerified } from '../utils/pagePersistence.js'
 import { listPageUsersFromMongo } from '../utils/userPersistence.js'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import { requireRole } from '../middleware/roleMiddleware.js'
+import { env } from '../config/env.js'
 
 const router = Router()
 
@@ -60,6 +61,20 @@ router.get('/pages', authMiddleware, requireRole('admin'), async (req, res) => {
     res.status(500).json({ message: error.message || 'Failed to load pages' })
   }
 })
+router.patch('/pages/:id/verified', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    const page = await setPageVerified(req.params.id, Boolean(req.body?.verified))
+    if (!page) {
+      return res.status(404).json({ message: 'Page not found' })
+    }
+    res.json({
+      message: `Blue mark ${page.verified ? 'enabled' : 'disabled'} for ${page.pageName}.`,
+      page,
+    })
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to update page blue mark' })
+  }
+})
 router.get('/pages/owner/:ownerId', authMiddleware, async (req, res) => {
   try {
     const page = await getPageRecordByOwner(req.params.ownerId)
@@ -82,6 +97,42 @@ router.get('/pages/:slug', authMiddleware, async (req, res) => {
     res.json({ page })
   } catch (error) {
     res.status(500).json({ message: error.message || 'Failed to load page' })
+  }
+})
+router.get('/invitations/history', authMiddleware, requireRole('admin'), async (req, res) => {
+  try {
+    if (!env.sendgridApiKey) {
+      return res.status(500).json({ message: 'Email service not configured' })
+    }
+
+    const query = `from_email = "${env.sendgridFromEmail}" AND subject = "You are invited to join MiitVerse"`
+    const url = `https://api.sendgrid.com/v3/messages?limit=50&query=${encodeURIComponent(query)}`
+    const response = await fetch(url, {
+      headers: { Authorization: `Bearer ${env.sendgridApiKey}` },
+    })
+
+    if (!response.ok) {
+      const body = await response.text()
+      return res.status(response.status).json({
+        message: `Failed to load invitation history from email provider (${response.status}).`,
+        detail: body.slice(0, 300),
+      })
+    }
+
+    const data = await response.json()
+    const history = (data.messages || []).map((message) => ({
+      id: message.msg_id,
+      to: message.to_email,
+      subject: message.subject,
+      status: message.status || 'unknown',
+      lastEventTime: message.last_event_time || null,
+      opensCount: message.opens_count || 0,
+      clicksCount: message.clicks_count || 0,
+    }))
+
+    res.json({ history })
+  } catch (error) {
+    res.status(500).json({ message: error.message || 'Failed to load invitation history' })
   }
 })
 router.post('/create-page-account', authMiddleware, requireRole('admin'), createPageAccount)

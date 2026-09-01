@@ -68,40 +68,69 @@ function buildInvitationLink(email) {
 async function sendInvitationEmail(toEmail) {
   const invitationLink = buildInvitationLink(toEmail)
   const html = `
-    <div style="margin:0; padding:0; background:#eef3fb;">
-      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; background:#eef3fb;">
+    <div style="margin:0; padding:0; background:#eef1f8;">
+      <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; background:#eef1f8;">
         <tr>
-          <td align="center" style="padding:36px 16px;">
-            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%; max-width:640px; border-collapse:collapse; overflow:hidden; border-radius:24px; background:#ffffff; box-shadow:0 22px 60px rgba(12, 35, 80, 0.14);">
+          <td align="center" style="padding:44px 20px;">
+            <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%; max-width:480px; border-collapse:separate; background:#ffffff; border-radius:18px; overflow:hidden; box-shadow:0 10px 30px rgba(22,36,74,.10);">
+
+              <!-- Header with MiitVerse wordmark (blue + yellow brand) -->
               <tr>
-                <td style="padding:0; background:#001e62;">
-                  <div style="padding:30px 34px 28px; background:linear-gradient(135deg,#001e62 0%,#123781 62%,#f4b400 180%);">
-                    <div style="font-family:Arial, sans-serif; color:#ffffff; font-size:13px; font-weight:700; letter-spacing:.14em; text-transform:uppercase;">MiitVerse Invitation</div>
-                    <h1 style="margin:18px 0 0; font-family:Arial, sans-serif; color:#ffffff; font-size:32px; line-height:1.18; font-weight:800;">You are invited to join MiitVerse</h1>
-                    <p style="margin:12px 0 0; font-family:Arial, sans-serif; color:rgba(255,255,255,.82); font-size:16px; line-height:1.65;">The official MIIT social hub is ready for you. Create your account and connect with your campus community.</p>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td style="padding:34px; font-family:Arial, sans-serif; color:#1f2937;">
-                  <p style="margin:0; font-size:16px; line-height:1.7; color:#475569;">An administrator invited <strong style="color:#0f172a;">${toEmail}</strong> to MiitVerse. Use the secure button below to open the registration page with your email already filled in.</p>
-                  <div style="margin:30px 0 26px; text-align:center;">
-                    <a href="${invitationLink}" style="display:inline-block; padding:15px 30px; border-radius:999px; background:#0b3b9a; color:#ffffff; font-family:Arial, sans-serif; font-size:16px; font-weight:800; text-decoration:none; box-shadow:0 12px 24px rgba(11,59,154,.25);">Accept Invitation</a>
-                  </div>
-                  <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; border:1px solid #dbe5f2; border-radius:16px; background:#f8fbff;">
+                <td align="center" style="padding:40px 40px 0; background-color:#0b2a5b; background-image:linear-gradient(135deg,#0b2a5b 0%,#123a7a 100%); font-family:Arial, Helvetica, sans-serif;">
+                  <table role="presentation" cellspacing="0" cellpadding="0" style="border-collapse:collapse;">
                     <tr>
-                      <td style="padding:18px;">
-                        <p style="margin:0 0 8px; font-size:13px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:.08em;">Registration link</p>
-                        <p style="margin:0; font-size:14px; line-height:1.55; color:#174287; word-break:break-word;">${invitationLink}</p>
+                      <td style="width:62px; height:62px; background:#ffffff; border-radius:50%; text-align:center; vertical-align:middle;">
+                        <img src="https://miitverse-xi.vercel.app/miitLogo.png" alt="MIIT" width="46" height="46" style="display:block; margin:8px auto; width:46px; height:46px; border-radius:50%;" />
                       </td>
                     </tr>
                   </table>
-                  <p style="margin:24px 0 0; font-size:13px; line-height:1.6; color:#64748b;">If you were not expecting this invitation, you can safely ignore this email.</p>
+                  <div style="margin-top:14px; font-size:22px; font-weight:bold; color:#ffffff; letter-spacing:1px;">
+                    <span style="color:#ffffff;">Miit</span><span style="color:#ffc107;">Verse</span>
+                  </div>
+                  <div style="margin:8px 0 28px; font-size:11px; color:rgba(255,255,255,.65); letter-spacing:2px;">OFFICIAL SOCIAL HUB OF MIIT</div>
                 </td>
               </tr>
+
+              <!-- Yellow accent divider -->
               <tr>
-                <td style="padding:18px 34px 28px; font-family:Arial, sans-serif; color:#94a3b8; font-size:12px; line-height:1.6; background:#ffffff; border-top:1px solid #edf2f7;">
-                  Sent by MiitVerse Authentication
+                <td style="height:4px; background:#ffc107; font-size:0; line-height:0;">&nbsp;</td>
+              </tr>
+
+              <!-- Body -->
+              <tr>
+                <td style="padding:34px 40px 0; font-family:Arial, Helvetica, sans-serif; text-align:center; background:#ffffff;">
+                  <h1 style="margin:0; font-size:21px; line-height:1.4; color:#12233f; font-weight:bold;">You're invited to join MiitVerse</h1>
+                  <p style="margin:14px 0 0; font-size:14px; line-height:1.75; color:#5c6a85;">
+                    Hello <strong style="color:#12233f;">${toEmail}</strong>,<br />
+                    You have been invited to join MiitVerse — the official MIIT social hub. Tap the button below to create your account.
+                  </p>
+                </td>
+              </tr>
+
+              <!-- CTA -->
+              <tr>
+                <td align="center" style="padding:26px 40px 0; font-family:Arial, Helvetica, sans-serif; background:#ffffff;">
+                  <a href="${invitationLink}" style="display:inline-block; padding:14px 48px; background-color:#ffc107; color:#12233f; font-size:15px; font-weight:bold; text-decoration:none; border-radius:10px;">Accept Invitation</a>
+                </td>
+              </tr>
+
+              <!-- Fallback link -->
+              <tr>
+                <td style="padding:22px 40px 34px; font-family:Arial, Helvetica, sans-serif; background:#ffffff;">
+                  <p style="margin:0; font-size:12px; line-height:1.7; color:#8b96ab; text-align:center; word-break:break-all;">
+                    If the button doesn't work, copy this link:<br />
+                    <a href="${invitationLink}" style="color:#1450b8; text-decoration:none;">${invitationLink}</a>
+                  </p>
+                </td>
+              </tr>
+
+              <!-- Footer -->
+              <tr>
+                <td style="padding:18px 40px; background:#f6f8fc; border-top:1px solid #e9eef7; font-family:Arial, Helvetica, sans-serif; text-align:center;">
+                  <p style="margin:0; font-size:11px; line-height:1.7; color:#a5aec0;">
+                    <span style="color:#1450b8; font-weight:bold;">Miit</span><span style="color:#c79a00; font-weight:bold;">Verse</span> &bull; miitverse-xi.vercel.app<br />
+                    If you weren't expecting this invitation, you can safely ignore this email.
+                  </p>
                 </td>
               </tr>
             </table>
@@ -111,7 +140,7 @@ async function sendInvitationEmail(toEmail) {
     </div>
   `
 
-  const text = `You are invited to join MiitVerse.\n\nAccept your invitation and complete registration here:\n${invitationLink}\n\nIf you did not expect this invitation, please ignore this message.`
+  const text = `You are invited to join MiitVerse.\n\nInvited email: ${toEmail}\nAccept your invitation and complete registration here:\n${invitationLink}\n\nIf you did not expect this invitation, please ignore this message.`
 
   return sendEmail(toEmail, 'You are invited to join MiitVerse', html, text)
 }

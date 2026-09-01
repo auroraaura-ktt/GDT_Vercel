@@ -8,6 +8,7 @@ import {
   getUserFromMongo,
   persistUserToBothDatabases,
   setUserSuspensionInMongo,
+  setUserVerifiedInMongo,
 } from '../utils/userPersistence.js'
 
 const __filename = fileURLToPath(import.meta.url)
@@ -291,6 +292,7 @@ export async function listUsers(req, res, deps = {}) {
           email: user.email,
           role: user.role,
           suspended: Boolean(user.suspended),
+          verified: user.verified !== undefined ? Boolean(user.verified) : true,
           createdAt: user.createdAt,
         }
       }),
@@ -387,6 +389,77 @@ export async function setUserSuspension(req, res) {
         username: updatedUser.username,
         email: updatedUser.email,
         role: updatedUser.role,
+        suspended: Boolean(updatedUser.suspended),
+        createdAt: updatedUser.createdAt,
+      },
+    })
+  } finally {
+    await session.close()
+  }
+}
+
+export async function setUserVerified(req, res) {
+  const { verified } = req.body || {}
+  const userId = req.params.id
+
+  if (typeof verified !== 'boolean') {
+    return res.status(400).json({ message: 'verified must be a boolean' })
+  }
+
+  const session = driver.session()
+  try {
+    const existing = await session.executeRead((tx) =>
+      tx.run(
+        `
+          MATCH (user:User { id: $id })
+          RETURN user
+          LIMIT 1
+        `,
+        { id: userId }
+      )
+    )
+
+    if (existing.records.length === 0) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    const targetUser = getUserProperties(existing.records[0].get('user'))
+
+    // Blue mark applies to regular users and page accounts, never to admins.
+    if (targetUser.role === 'admin') {
+      return res.status(403).json({ message: 'Admin accounts cannot receive a blue mark' })
+    }
+
+    const result = await session.executeWrite((tx) =>
+      tx.run(
+        `
+          MATCH (user:User { id: $id })
+          SET user.verified = $verified
+          RETURN user
+        `,
+        { id: userId, verified }
+      )
+    )
+
+    if (result.records.length === 0) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    const updatedUser = getUserProperties(result.records[0].get('user'))
+    try {
+      await setUserVerifiedInMongo(userId, verified)
+    } catch (error) {
+      console.warn('MongoDB verified update failed:', error.message)
+    }
+
+    return res.json({
+      message: verified ? 'Blue mark enabled for user' : 'Blue mark disabled for user',
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        verified: Boolean(updatedUser.verified),
         suspended: Boolean(updatedUser.suspended),
         createdAt: updatedUser.createdAt,
       },

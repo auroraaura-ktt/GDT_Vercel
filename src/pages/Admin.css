@@ -893,3 +893,174 @@
 .admin-confirm-overlay { position: fixed; inset: 0; z-index: 1100; display: grid; place-items: center; padding: 24px; background: rgba(7, 20, 49, .58); backdrop-filter: blur(4px); }
 .admin-confirm-dialog { width: min(450px, 100%); padding: 30px; border-radius: 22px; background: #fff; text-align: center; box-shadow: 0 25px 70px rgba(0,0,0,.28); }.admin-confirm-dialog h3 { margin: 9px 0 10px; color: #17213a; font-size: 1.4rem; }.admin-confirm-dialog > p:not(.admin-eyebrow) { margin: 0; color: #667085; line-height: 1.55; }.admin-confirm-icon { width: 48px; height: 48px; display: grid; place-items: center; margin: 0 auto 17px; border-radius: 50%; font-size: 1.3rem; font-weight: 900; }.admin-confirm-icon.delete { color: #b42332; background: #ffe1e5; }.admin-confirm-icon.suspend { color: #8a5600; background: #fff0c8; }.admin-confirm-icon.restore { color: #08724a; background: #dcf8e8; }.admin-confirm-actions { display: flex; justify-content: center; gap: 12px; margin-top: 25px; }.admin-confirm-actions button { min-width: 135px; }
 @media (max-width: 480px) { .admin-confirm-actions { flex-direction: column-reverse; }.admin-confirm-actions button { width: 100%; } }
+
+/* USERS TABS (Regular / Page) */
+
+.admin-users-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 16px 0 20px;
+  flex-wrap: wrap;
+}
+
+.admin-users-tab {
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  color: #123781;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-users-tab:hover {
+  border-color: #123781;
+}
+
+.admin-users-tab.active {
+  background: linear-gradient(135deg, #0b3b9a, #123781);
+  color: #ffffff;
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(11, 59, 154, 0.25);
+}
+
+.admin-users-refresh {
+  margin-left: auto;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  cursor: pointer;
+  font-weight: 600;
+  color: #123781;
+}
+
+/* BLUE MARK BADGES */
+
+.admin-verified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e8f1ff;
+  color: #1d6fe0;
+  font-size: 0.78rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.admin-unverified-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* BLUE MARK ACTION BUTTON */
+
+.admin-verified-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 11px 14px;
+  border-radius: 10px;
+  border: 1px solid #1d6fe0;
+  background: #e8f1ff;
+  color: #1d6fe0;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.admin-verified-btn:hover:not(:disabled) {
+  background: #1d6fe0;
+  color: #ffffff;
+}
+
+.admin-verified-btn.enabled {
+  background: #1d6fe0;
+  color: #ffffff;
+}
+
+.admin-verified-btn.enabled:hover:not(:disabled) {
+  background: #1458b8;
+}
+
+.admin-verified-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* DASHBOARD QUICK ACTIONS */
+
+.dashboard-quick-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 20px 0;
+}
+
+.dashboard-quick-actions button {
+  padding: 11px 18px;
+  border-radius: 10px;
+  border: 1px solid #cbd5f5;
+  background: #ffffff;
+  color: #123781;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.dashboard-quick-actions button:hover {
+  background: #0b3b9a;
+  border-color: #0b3b9a;
+  color: #ffffff;
+  transform: translateY(-1px);
+}
+
+/* INVITATION LINK */
+
+.admin-invite-link {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 10px;
+  background: #eef4ff;
+  border: 1px dashed #9db8e8;
+  font-size: 0.92rem;
+}
+
+.admin-invite-link a {
+  color: #0b3b9a;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.admin-invite-link a:hover {
+  text-decoration: underline;
+}
+
+.admin-page-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.admin-user-actions-card small {
+  display: block;
+  margin-top: 10px;
+  color: #6b7280;
+  line-height: 1.5;
+}

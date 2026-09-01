@@ -148,6 +148,15 @@ export async function deleteUserFromMongo(userId) {
   return UserModel.findOneAndDelete({ id: userId })
 }
 
+export async function setUserVerifiedInMongo(userId, verified) {
+  const updated = await UserModel.findOneAndUpdate(
+    { id: userId },
+    { $set: { verified: Boolean(verified) } },
+    { new: true }
+  ).lean()
+  return updated
+}
+
 export async function setUserSuspensionInMongo(userId, suspended) {
   return UserModel.findOneAndUpdate(
     { id: userId },

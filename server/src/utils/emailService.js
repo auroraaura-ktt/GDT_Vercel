@@ -102,9 +102,14 @@ export async function sendEmail(to, subject, html, text = '') {
   const msg = {
     to,
     from: `${env.sendgridFromName} <${env.sendgridFromEmail}>`,
+    replyTo: `${env.sendgridFromName} <${env.sendgridFromEmail}>`,
     subject,
     html,
     text,
+    headers: {
+      'X-Priority': '3',
+      'X-Mailer': 'MiitVerse Mailer',
+    },
   }
 
   try {
