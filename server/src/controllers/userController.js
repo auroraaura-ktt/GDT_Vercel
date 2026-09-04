@@ -6,6 +6,7 @@ import { driver } from '../config/neo4j.js'
 import bcrypt from 'bcryptjs'
 import {
   getUserFromMongo,
+  deleteUserFromMongo,
   persistUserToBothDatabases,
   setUserSuspensionInMongo,
   setUserVerifiedInMongo,
@@ -469,8 +470,10 @@ export async function setUserVerified(req, res) {
   }
 }
 
-export async function deleteUser(req, res) {
-  const session = driver.session()
+export async function deleteUser(req, res, deps = {}) {
+  const driverInstance = deps.driver || driver
+  const mongoDeleter = deps.mongoDeleter || deleteUserFromMongo
+  const session = driverInstance.session()
 
   try {
     const result = await session.executeWrite((tx) =>
@@ -490,8 +493,15 @@ export async function deleteUser(req, res) {
       ? deletedCountValue.toNumber()
       : Number(deletedCountValue || 0)
 
-    if (deletedCount === 0) {
-      return res.status(404).json({ message: 'User not found' })
+    try {
+      const mongoUser = await mongoDeleter(req.params.id)
+
+      if (deletedCount === 0 && !mongoUser) {
+        return res.status(404).json({ message: 'User not found' })
+      }
+    } catch (error) {
+      console.warn('MongoDB user deletion failed:', error.message)
+      return res.status(500).json({ message: 'Failed to delete user from all databases' })
     }
 
     return res.json({ message: 'User deleted successfully' })

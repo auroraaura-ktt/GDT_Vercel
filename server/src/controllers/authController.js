@@ -145,14 +145,14 @@ async function sendInvitationEmail(toEmail) {
   return sendEmail(toEmail, 'You are invited to join MiitVerse', html, text)
 }
 
-async function lookupUserInMongoSafely(identifier) {
+async function lookupUserInMongoSafely(identifier, getMongoUser = getUserFromMongo) {
   const normalizedIdentifier = typeof identifier === 'string' ? identifier.trim() : ''
   if (!normalizedIdentifier) {
     return null
   }
 
   try {
-    return await getUserFromMongo(normalizedIdentifier)
+    return await getMongoUser(normalizedIdentifier)
   } catch (error) {
     if (isMongoUnavailableError(error)) {
       console.warn(`MongoDB lookup unavailable for ${normalizedIdentifier}; continuing in degraded mode`, error.message)
@@ -163,29 +163,39 @@ async function lookupUserInMongoSafely(identifier) {
   }
 }
 
-async function doesUserAlreadyExist(email) {
+export async function doesUserAlreadyExist(email, deps = {}) {
   const normalizedEmail = normalizeEmail(email)
   if (!normalizedEmail) return false
 
-  const existingMongoUser = await lookupUserInMongoSafely(normalizedEmail)
+  const getMongoUser = deps.getMongoUser || getUserFromMongo
+  const existingMongoUser = await lookupUserInMongoSafely(normalizedEmail, getMongoUser)
   if (existingMongoUser) {
     return true
   }
 
-  const session = driver.session()
+  const driverInstance = deps.driver || driver
+  const session = driverInstance.session()
   try {
-    const existing = await session.executeRead((tx) =>
-      tx.run(
-        `
-          MATCH (user:User)
-          WHERE user.email = $email
-          RETURN user
-          LIMIT 1
-        `,
-        { email: normalizedEmail }
+    try {
+      const existing = await session.executeRead((tx) =>
+        tx.run(
+          `
+            MATCH (user:User)
+            WHERE user.email = $email
+            RETURN user
+            LIMIT 1
+          `,
+          { email: normalizedEmail }
+        )
       )
-    )
-    return existing.records.length > 0
+      return existing.records.length > 0
+    } catch (error) {
+      if (isNeo4jUnavailableError(error)) {
+        console.warn('Neo4j duplicate check unavailable; continuing with MongoDB.', error.message)
+        return false
+      }
+      throw error
+    }
   } finally {
     await session.close()
   }
@@ -264,20 +274,28 @@ export async function registerUser(req, res) {
   const session = driver.session()
 
   try {
-    const existing = await session.executeRead((tx) =>
-      tx.run(
-        `
-          MATCH (user:User)
-          WHERE user.email = $email OR user.username = $username
-          RETURN user
-          LIMIT 1
-        `,
-        { email: normalizedEmail, username: trimmedUsername }
+    try {
+      const existing = await session.executeRead((tx) =>
+        tx.run(
+          `
+            MATCH (user:User)
+            WHERE user.email = $email OR user.username = $username
+            RETURN user
+            LIMIT 1
+          `,
+          { email: normalizedEmail, username: trimmedUsername }
+        )
       )
-    )
 
-    if (existing.records.length > 0) {
-      return res.status(409).json({ message: 'User already exists' })
+      if (existing.records.length > 0) {
+        return res.status(409).json({ message: 'User already exists' })
+      }
+    } catch (error) {
+      if (!isNeo4jUnavailableError(error)) {
+        throw error
+      }
+
+      console.warn('Neo4j duplicate check unavailable; continuing with MongoDB.', error.message)
     }
 
     // Check whether the username is already pending for a different email.

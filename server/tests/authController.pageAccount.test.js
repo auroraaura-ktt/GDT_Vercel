@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { doesPageAccountAlreadyExist, findPageAccountConflict } from '../src/controllers/authController.js'
+import { doesPageAccountAlreadyExist, doesUserAlreadyExist, findPageAccountConflict } from '../src/controllers/authController.js'
 
 const existingPageEmail = 'miitverse@miitverse.com'
 
@@ -67,6 +67,24 @@ test('page account duplicate detection continues when Neo4j is temporarily unava
   const exists = await doesPageAccountAlreadyExist(createPayload('newpage@miitverse.com', 'New Page'), {
     getUser: async () => null,
     driverInstance: unavailableDriver,
+  })
+
+  assert.equal(exists, false)
+})
+
+test('user duplicate check continues when Neo4j is temporarily unavailable', async () => {
+  const unavailableDriver = {
+    session: () => ({
+      executeRead: async () => {
+        throw new Error('Neo4j service unavailable')
+      },
+      close: async () => {},
+    }),
+  }
+
+  const exists = await doesUserAlreadyExist('new@miit.edu.mm', {
+    getMongoUser: async () => null,
+    driver: unavailableDriver,
   })
 
   assert.equal(exists, false)

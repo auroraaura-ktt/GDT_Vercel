@@ -355,6 +355,26 @@ export default function Admin() {
     }
   }
 
+  const handleDeletePageAccount = async (targetPage) => {
+    try {
+      await apiRequest(`/users/${targetPage.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      setPages((currentPages) => currentPages.filter((item) => item.id !== targetPage.id))
+      if (selectedPage?.id === targetPage.id) {
+        setSelectedPage(null)
+        setActiveSection('page-accounts')
+      }
+      setPageAccountMessage({ type: 'success', text: `Page account "${targetPage.pageName || targetPage.email}" deleted successfully.` })
+      await loadPages()
+    } catch (err) {
+      setPageAccountMessage({ type: 'error', text: err.message || 'Failed to delete page account' })
+    }
+  }
+
   const openUserDetails = (userItem) => {
     setSelectedUser(userItem)
     setUserActionMessage({ type: '', text: '' })
@@ -450,12 +470,21 @@ export default function Admin() {
     setUserConfirmation({ type: 'delete', user: selectedUser })
   }
 
+  const requestPageDeletion = () => {
+    if (!selectedPage) return
+    setUserConfirmation({ type: 'delete', user: selectedPage })
+  }
+
   const confirmUserAction = async () => {
     if (!userConfirmation) return
     const { type: actionType, user: targetUser } = userConfirmation
     setUserConfirmation(null)
 
     if (actionType === 'delete') {
+      if (targetUser.role === 'page') {
+        await handleDeletePageAccount(targetUser)
+        return
+      }
       await handleDeleteUser(targetUser.id, targetUser.fullName || targetUser.username)
       return
     }
@@ -825,6 +854,7 @@ export default function Admin() {
                 </button>
                 <button type="button" className="admin-reset-btn" onClick={() => setResetPasswordUserId(selectedPage.ownerId || selectedPage.id)}>Reset password</button>
                 <a className="admin-button" href={`/page/${selectedPage.slug}`}>Open Dashboard</a>
+                <button type="button" className="admin-delete-btn" onClick={requestPageDeletion}>Delete page account</button>
                 <small>Posts published from this page's dashboard appear under "{pageDisplayName}", never under the admin account.</small>
               </section>
             </div>
@@ -1346,7 +1376,7 @@ export default function Admin() {
               <span className={`admin-confirm-icon ${userConfirmation.type}`}>{userConfirmation.type === 'delete' ? '!' : '✓'}</span>
               <p className="admin-eyebrow">CONFIRM ACTION</p>
               <h3 id="admin-confirm-title">{userConfirmation.type === 'delete' ? 'Delete this account?' : userConfirmation.type === 'suspend' ? 'Suspend this account?' : 'Restore this account?'}</h3>
-              <p>{userConfirmation.type === 'delete' ? `This permanently removes ${userConfirmation.user.fullName || userConfirmation.user.username}'s account and cannot be undone.` : userConfirmation.type === 'suspend' ? `${userConfirmation.user.fullName || userConfirmation.user.username} will no longer be able to sign in until the account is restored.` : `${userConfirmation.user.fullName || userConfirmation.user.username} will be able to sign in again.`}</p>
+              <p>{userConfirmation.type === 'delete' ? `This permanently removes ${userConfirmation.user.fullName || userConfirmation.user.username || userConfirmation.user.pageName || 'this account'}'s account and cannot be undone.` : userConfirmation.type === 'suspend' ? `${userConfirmation.user.fullName || userConfirmation.user.username} will no longer be able to sign in until the account is restored.` : `${userConfirmation.user.fullName || userConfirmation.user.username} will be able to sign in again.`}</p>
               <div className="admin-confirm-actions">
                 <button type="button" className="form-cancel" onClick={() => setUserConfirmation(null)}>Cancel</button>
                 <button type="button" className={userConfirmation.type === 'delete' ? 'admin-delete-btn' : userConfirmation.type === 'suspend' ? 'admin-suspend-btn' : 'form-submit'} onClick={confirmUserAction}>{userConfirmation.type === 'delete' ? 'Delete account' : userConfirmation.type === 'suspend' ? 'Suspend account' : 'Restore account'}</button>

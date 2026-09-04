@@ -1,1 +1,11 @@
-{}
+{
+  "2022-miit-cse-022@miit.edu.mm": {
+    "username": "Kyaw Thein Tun",
+    "email": "2022-miit-cse-022@miit.edu.mm",
+    "passwordHash": "$2b$10$xzyweqLcWtsKbxmj9gcDzOBdNA.WMuWjc0gS70zwAmVZY9NJhIPPK",
+    "verificationCode": "22238322",
+    "verificationExpires": 1788511505005,
+    "lastSentAt": 1788510605005,
+    "createdAt": "2026-09-04T08:30:05.004Z"
+  }
+}
