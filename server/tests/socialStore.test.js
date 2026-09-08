@@ -89,27 +89,22 @@ test('server weighted shuffle prioritizes higher-reaction user posts without rem
   assert.notDeepEqual(randomOrder.map((post) => post.id), ['high', 'middle', 'low']);
 });
 
-test('server weighted shuffle puts newest page posts before reaction-weighted user posts', () => {
+test('server feed sorts user and page posts by latest time', () => {
   const posts = [
-    { id: 'user-low', userId: 'user-1', likes: 0 },
+    { id: 'user-old', userId: 'user-1', likes: 0, createdAt: '2026-08-16T12:00:00.000Z' },
     { id: 'page-a', userId: 'page-1', likes: 1000, createdAt: '2026-08-19T12:00:00.000Z' },
-    { id: 'user-high', userId: 'user-2', likes: 100 },
+    { id: 'user-new', userId: 'user-2', likes: 100, createdAt: '2026-08-20T12:00:00.000Z' },
     { id: 'page-b', userId: 'page-2', likes: 1000, createdAt: '2026-08-18T12:00:00.000Z' },
-    { id: 'user-middle', userId: 'user-3', likes: 25 },
   ];
 
   const shuffled = applyUserPostWeightedShuffle(posts, {
     pagePostUserIds: ['page-1', 'page-2'],
-    random: () => 0.5,
   });
 
   assert.deepEqual(shuffled.map((post) => post.id), [
+    'user-new',
     'page-a',
     'page-b',
-    'user-high',
-    'user-middle',
-    'user-low',
+    'user-old',
   ]);
-  assert.equal(shuffled[0].source, 'page');
-  assert.equal(shuffled[1].source, 'page');
 });

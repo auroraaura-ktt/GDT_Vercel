@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import {
   applyUserPostWeightedShuffle,
   getVisiblePosts,
+  isPagePost,
   shouldPersistSocialPost,
   shuffleUserPostsByReactions,
   toggleFollowRelationship,
@@ -78,39 +79,55 @@ test('shuffleUserPostsByReactions still randomizes user posts', () => {
   assert.deepEqual(shuffled.map((post) => post.id), ['second', 'third', 'first']);
 });
 
-test('applyUserPostWeightedShuffle puts newest page posts before reaction-weighted user posts', () => {
+test('applyUserPostWeightedShuffle sorts user and page posts by latest time', () => {
   const posts = [
-    { id: 'user-low', userId: 'user-1', likes: 1 },
-    { id: 'page-new', userId: 'page-1', likes: 0, createdAt: '2026-08-19T12:00:00.000Z' },
-    { id: 'user-high', userId: 'user-2', likes: 100 },
-    { id: 'page-old', userId: 'page-2', likes: 0, createdAt: '2026-08-18T12:00:00.000Z' },
-    { id: 'user-middle', userId: 'user-3', likes: 20 },
+    { id: 'user-old', userId: 'user-1', likes: 1, createdAt: '2026-08-18T12:00:00.000Z' },
+    { id: 'page-new', userId: 'page-1', likes: 0, createdAt: '2026-08-20T12:00:00.000Z' },
+    { id: 'user-new', userId: 'user-2', likes: 100, createdAt: '2026-08-19T12:00:00.000Z' },
+    { id: 'page-old', userId: 'page-2', likes: 0, createdAt: '2026-08-17T12:00:00.000Z' },
   ];
 
   const shuffled = applyUserPostWeightedShuffle(posts, {
     pagePostUserIds: ['page-1', 'page-2'],
-    random: () => 0.5,
   });
 
-  assert.deepEqual(shuffled.map((post) => post.id), [
-    'page-new',
-    'page-old',
-    'user-high',
-    'user-middle',
-    'user-low',
-  ]);
+  assert.deepEqual(shuffled.map((post) => post.id), ['page-new', 'user-new', 'user-old', 'page-old']);
 });
 
-test('getVisiblePosts puts source page posts first', () => {
+test('getVisiblePosts keeps all visible posts in latest-first order', () => {
   const posts = [
-    { id: 'user-low', userId: 'user-1', likes: 1, visibility: 'public' },
+    { id: 'user-old', userId: 'user-1', likes: 1, visibility: 'public', createdAt: '2026-08-18T12:00:00.000Z' },
     { id: 'page-new', userId: 'page-1', likes: 0, visibility: 'public', source: 'page', createdAt: '2026-08-19T12:00:00.000Z' },
-    { id: 'user-high', userId: 'user-2', likes: 100, visibility: 'public' },
+    { id: 'user-new', userId: 'user-2', likes: 1, visibility: 'public', createdAt: '2026-08-20T12:00:00.000Z' },
   ];
 
   const visible = getVisiblePosts(posts, 'me', [], {
-    random: () => 0.5,
   });
 
-  assert.deepEqual(visible.map((post) => post.id), ['page-new', 'user-high', 'user-low']);
+  assert.deepEqual(visible.map((post) => post.id), ['user-new', 'page-new', 'user-old']);
+});
+
+test('isPagePost separates page posts from normal user posts', () => {
+  const posts = [
+    { id: 'user-1', userId: 'u1', source: 'user' },
+    { id: 'page-1', userId: 'p1', source: 'page', pageName: 'Page One' },
+    { id: 'page-2', userId: 'p2', postType: 'page' },
+    { id: 'user-2', userId: 'u2' },
+  ];
+
+  const pagePosts = posts.filter((post) => isPagePost(post));
+  const userPosts = posts.filter((post) => !isPagePost(post));
+
+  assert.deepEqual(pagePosts.map((post) => post.id), ['page-1', 'page-2']);
+  assert.deepEqual(userPosts.map((post) => post.id), ['user-1', 'user-2']);
+});
+
+test('isPagePost identifies page posts by userId when a page list is provided', () => {
+  const posts = [
+    { id: 'page-3', userId: 'p3' },
+    { id: 'user-3', userId: 'u3' },
+  ];
+
+  const pagePosts = posts.filter((post) => isPagePost(post, ['p3']));
+  assert.deepEqual(pagePosts.map((post) => post.id), ['page-3']);
 });

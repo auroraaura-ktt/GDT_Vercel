@@ -572,3 +572,24 @@
     width: 100%;
   }
 }
+
+@media (max-width: 380px) {
+  .mv-profile-page {
+    padding-left: 6px;
+    padding-right: 6px;
+  }
+
+  .mv-profile-main {
+    padding-left: 12px;
+    padding-right: 12px;
+  }
+
+  .mv-card {
+    padding: 14px;
+  }
+
+  .mv-name-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

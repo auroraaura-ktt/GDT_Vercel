@@ -1,25 +1,62 @@
 import sgMail from '@sendgrid/mail'
+import nodemailer from 'nodemailer'
+
 import { env } from '../config/env.js'
 
-// Initialize SendGrid
-sgMail.setApiKey(env.sendgridApiKey)
+const FALLBACK_SENDGRID_FROM = 'noreply@sendgrid.net'
 
-/**
- * Send verification email with 8-digit code
- * @param {string} email - Recipient email
- * @param {string} code - 8-digit verification code
- * @returns {Promise<boolean>} - True if sent successfully
- */
-export async function sendVerificationEmail(email, code) {
-  if (!env.sendgridApiKey) {
-    console.error('SendGrid API key not configured')
-    throw new Error('Email service not configured - SendGrid API key missing')
+export function resolveSendgridFromAddress(fromEmail) {
+  const configuredValue = String(fromEmail || '').trim()
+
+  if (!configuredValue) {
+    return FALLBACK_SENDGRID_FROM
   }
 
-  const msg = {
-    to: email,
-    from: `${env.sendgridFromName} <${env.sendgridFromEmail}>`,
-    replyTo: `${env.sendgridFromName} <${env.sendgridFromEmail}>`,
+  const emailToCheck = configuredValue.toLowerCase()
+  const personalProviders = ['@gmail.com', '@hotmail.com', '@outlook.com', '@yahoo.com', '@icloud.com', '@live.com', '@msn.com']
+
+  if (personalProviders.some((provider) => emailToCheck.includes(provider))) {
+    return FALLBACK_SENDGRID_FROM
+  }
+
+  return configuredValue
+}
+
+export function decideEmailFallbackRoute({ sendgridEnabled, gmailEnabled } = {}) {
+  const sendgridIsEnabled = Boolean(sendgridEnabled)
+  const gmailIsEnabled = Boolean(gmailEnabled)
+
+  if (sendgridIsEnabled && gmailIsEnabled) {
+    return ['sendgrid', 'gmail']
+  }
+
+  if (sendgridIsEnabled) {
+    return ['sendgrid', 'none']
+  }
+
+  if (gmailIsEnabled) {
+    return ['gmail', 'none']
+  }
+
+  return ['none', 'none']
+}
+
+export function getPrimaryEmailSender(provider, configuredEmail, fallbackValue = '') {
+  const normalizedValue = String(configuredEmail || '').trim()
+
+  if (normalizedValue) {
+    return normalizedValue
+  }
+
+  return fallbackValue
+}
+
+if (env.sendgridApiKey) {
+  sgMail.setApiKey(env.sendgridApiKey)
+}
+
+function buildVerificationEmailPayload(code) {
+  return {
     subject: 'Your MiitVerse Email Verification Code',
     html: `
       <div style="font-family: Arial, sans-serif; max-width: 500px; margin: 0 auto;">
@@ -36,34 +73,105 @@ export async function sendVerificationEmail(email, code) {
       </div>
     `,
     text: `Your MiitVerse verification code is: ${code}\n\nThis code will expire in 15 minutes.\n\nIf you didn't request this code, please ignore this email.`,
+  }
+}
+
+async function sendWithSendGrid({ to, subject, html, text }) {
+  if (!env.sendgridApiKey) {
+    throw new Error('SendGrid API key not configured')
+  }
+
+  const fromAddress = resolveSendgridFromAddress(env.sendgridFromEmail)
+  const payload = {
+    to,
+    from: `${env.sendgridFromName} <${fromAddress}>`,
+    replyTo: `${env.sendgridFromName} <${fromAddress}>`,
+    subject,
+    html,
+    text,
     headers: {
       'X-Priority': '3',
       'X-Mailer': 'MiitVerse Mailer',
     },
   }
 
-  try {
-    const result = await sgMail.send(msg)
-    console.log('Verification email sent successfully:', result[0].statusCode, result[0].headers['x-message-id'])
-    return true
-  } catch (error) {
-    console.error('Failed to send verification email:', error.message || error)
-    // SendGrid specific error handling
-    if (error.response) {
-      console.error('SendGrid error status:', error.response.status)
-      console.error('SendGrid error body:', JSON.stringify(error.response.body, null, 2))
-    }
-    if (error.code === 401) {
-      throw new Error('SendGrid API key is invalid or expired')
-    }
-    if (error.code === 403) {
-      throw new Error('SendGrid API key does not have permission to send emails')
-    }
-    if (error.code === 400) {
-      throw new Error(`SendGrid request validation error: ${error.message}`)
-    }
-    throw new Error(`Email sending failed: ${error?.message || String(error)}`)
+  const result = await sgMail.send(payload)
+  console.log('Verification email sent successfully via SendGrid:', result[0].statusCode, result[0].headers['x-message-id'])
+  return true
+}
+
+async function sendWithGmailSmtp({ to, subject, html, text }) {
+  const gmailUser = String(env.gmailUser || '').trim()
+  const gmailPassword = String(env.gmailAppPassword || '').trim()
+  const gmailFromAddress = String(env.gmailFromEmail || gmailUser || '').trim()
+
+  if (!gmailUser || !gmailPassword || !gmailFromAddress) {
+    throw new Error('Gmail SMTP backup is not configured')
   }
+
+  const transporter = nodemailer.createTransport({
+    host: env.gmailSmtpHost,
+    port: Number(env.gmailSmtpPort || 465),
+    secure: true,
+    auth: {
+      user: gmailUser,
+      pass: gmailPassword,
+    },
+  })
+
+  const result = await transporter.sendMail({
+    from: `${env.sendgridFromName || 'MiitVerse'} <${gmailFromAddress}>`,
+    to,
+    subject,
+    html,
+    text,
+  })
+
+  console.log('Verification email sent successfully via Gmail SMTP:', result.messageId)
+  return true
+}
+
+async function sendWithConfiguredProvider(to, subject, html, text) {
+  const [primaryProvider, backupProvider] = decideEmailFallbackRoute({
+    sendgridEnabled: Boolean(env.sendgridApiKey),
+    gmailEnabled: Boolean(env.gmailUser && env.gmailAppPassword),
+  })
+
+  const providerOrder = [primaryProvider, backupProvider].filter((provider) => provider && provider !== 'none')
+
+  if (!providerOrder.length) {
+    throw new Error('No email provider is configured')
+  }
+
+  let lastError = null
+
+  for (const provider of providerOrder) {
+    try {
+      if (provider === 'sendgrid') {
+        return await sendWithSendGrid({ to, subject, html, text })
+      }
+
+      if (provider === 'gmail') {
+        return await sendWithGmailSmtp({ to, subject, html, text })
+      }
+    } catch (error) {
+      lastError = error
+      console.warn(`Email provider '${provider}' failed:`, error.message || error)
+    }
+  }
+
+  throw lastError || new Error('Email sending failed through all configured providers')
+}
+
+/**
+ * Send verification email with 8-digit code
+ * @param {string} email - Recipient email
+ * @param {string} code - 8-digit verification code
+ * @returns {Promise<boolean>} - True if sent successfully
+ */
+export async function sendVerificationEmail(email, code) {
+  const payload = buildVerificationEmailPayload(code)
+  return sendWithConfiguredProvider(email, payload.subject, payload.html, payload.text)
 }
 
 /**
@@ -71,19 +179,15 @@ export async function sendVerificationEmail(email, code) {
  * @returns {Promise<boolean>}
  */
 export async function verifyEmailConnection() {
-  if (!env.sendgridApiKey) {
-    console.warn('SendGrid API key not configured')
+  const hasSendgrid = Boolean(env.sendgridApiKey)
+  const hasGmail = Boolean(env.gmailUser && env.gmailAppPassword)
+
+  if (!hasSendgrid && !hasGmail) {
+    console.warn('No email providers configured')
     return false
   }
 
-  try {
-    // SendGrid validates the request synchronously, so if we get past initialization it should work
-    console.log('SendGrid email service configured and ready')
-    return true
-  } catch (error) {
-    console.error('Email service verification failed:', error.message || error)
-    return false
-  }
+  return true
 }
 
 /**
@@ -94,38 +198,5 @@ export async function verifyEmailConnection() {
  * @returns {Promise<boolean>}
  */
 export async function sendEmail(to, subject, html, text = '') {
-  if (!env.sendgridApiKey) {
-    console.error('SendGrid API key not configured')
-    throw new Error('Email service not configured - SendGrid API key missing')
-  }
-
-  const msg = {
-    to,
-    from: `${env.sendgridFromName} <${env.sendgridFromEmail}>`,
-    subject,
-    html,
-    text,
-  }
-
-  try {
-    const result = await sgMail.send(msg)
-    console.log('Email sent successfully:', result[0].statusCode)
-    return true
-  } catch (error) {
-    console.error('Failed to send email:', error.message || error)
-    if (error.response) {
-      console.error('SendGrid error status:', error.response.status)
-      console.error('SendGrid error body:', JSON.stringify(error.response.body, null, 2))
-    }
-    if (error.code === 401) {
-      throw new Error('SendGrid API key is invalid or expired')
-    }
-    if (error.code === 403) {
-      throw new Error('SendGrid API key does not have permission to send emails')
-    }
-    if (error.code === 400) {
-      throw new Error(`SendGrid request validation error: ${error.message}`)
-    }
-    throw new Error(`Email sending failed: ${error?.message || String(error)}`)
-  }
+  return sendWithConfiguredProvider(to, subject, html, text)
 }

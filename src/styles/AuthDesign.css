@@ -21,6 +21,7 @@ html, body, #root {
 
 .logo-section {
   flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -66,6 +67,7 @@ html, body, #root {
 
 .form-section {
   flex: 1;
+  min-width: 0;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -79,6 +81,7 @@ html, body, #root {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(100, 255, 218, 0.12);
   color: #fff;
   width: 100%;
+  min-width: 0;
   max-width: 520px;
   border: 1px solid rgba(100, 255, 218, 0.12);
   animation: slideInRight 0.6s ease-out;
@@ -232,6 +235,27 @@ html, body, #root {
 .toggle-text a:hover {
   color: #56e6c4;
   text-decoration: underline;
+}
+
+.auth-back-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 18px;
+  border: 1px solid rgba(100, 255, 218, 0.2);
+  background: rgba(100, 255, 218, 0.08);
+  color: #64ffda;
+  border-radius: 999px;
+  padding: 8px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.auth-back-btn:hover {
+  background: rgba(100, 255, 218, 0.14);
+  transform: translateY(-1px);
 }
 
 .password-validation {
@@ -398,9 +422,13 @@ html, body, #root {
 
   .form-section {
     padding: 16px 12px;
+    width: 100%;
   }
 
   .auth-container {
+    width: 100%;
+    max-width: 100%;
+    animation: none;
     padding: 24px 16px;
     border-radius: 16px;
   }
@@ -450,5 +478,17 @@ html, body, #root {
     width: 16px;
     height: 16px;
     font-size: 11px;
+  }
+}
+
+@media (max-width: 380px) {
+  .otp-inputs {
+    gap: 5px;
+  }
+
+  .otp-box {
+    width: 42px;
+    height: 50px;
+    line-height: 50px;
   }
 }

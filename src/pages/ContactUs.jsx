@@ -156,6 +156,7 @@ export default function ContactUs() {
               </div>
 
               <button type="submit" className="gold-btn" disabled={loading}>
+                {loading && <span className="button-spinner" aria-hidden="true" />}
                 {loading ? 'Sending...' : 'Send Message'}
               </button>
             </form>

@@ -172,7 +172,7 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
           <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
         </label>
         <button type="button" className="video-trigger" onClick={onRefresh}>
-          <FaSync /> {isRefreshing ? 'Refreshing…' : 'Refresh'}
+          {isRefreshing ? <span className="button-spinner" aria-hidden="true" /> : <FaSync />} {isRefreshing ? 'Refreshing…' : 'Refresh'}
         </button>
         <button type="submit">
           <FaPaperPlane /> Post

@@ -32,25 +32,20 @@ export function shuffleUserPostsByReactions(posts = [], random = Math.random) {
     .map((entry) => entry.post);
 }
 
-function sortPagePostsByLatest(posts = []) {
+function sortPostsByLatest(posts = []) {
   return [...(posts || [])].sort((left, right) => {
-    return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
+    const rightTime = Date.parse(right.createdAt || '');
+    const leftTime = Date.parse(left.createdAt || '');
+    if (Number.isNaN(rightTime) && Number.isNaN(leftTime)) return 0;
+    if (Number.isNaN(rightTime)) return 1;
+    if (Number.isNaN(leftTime)) return -1;
+    if (rightTime !== leftTime) return rightTime - leftTime;
+    return String(right.id || '').localeCompare(String(left.id || ''));
   });
 }
 
 export function applyUserPostWeightedShuffle(posts = [], options = {}) {
-  const pagePostUserIds = options.pagePostUserIds || options.pageUserIds || [];
-  const random = options.random || Math.random;
-  const pagePosts = [];
-  const userPosts = [];
-
-  for (const post of posts || []) {
-    if (isPagePost(post, pagePostUserIds)) pagePosts.push(post);
-    else userPosts.push(post);
-  }
-
-  const shuffledUserPosts = shuffleUserPostsByReactions(userPosts, random);
-  return [...sortPagePostsByLatest(pagePosts), ...shuffledUserPosts];
+  return sortPostsByLatest(posts);
 }
 
 export function getVisiblePosts(posts = [], currentUserId = null, following = [], options = {}) {

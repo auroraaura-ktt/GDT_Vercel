@@ -1,0 +1,32 @@
+{
+  "users": [
+    {
+      "id": "admin-MiitVerse_ktt",
+      "username": "MiitVerse_ktt",
+      "email": "kyaw_thein_tun@miitverse.com",
+      "role": "admin",
+      "createdAt": "2026-09-08T12:07:25.446Z"
+    },
+    {
+      "id": "admin-MiitVerse_swt",
+      "username": "MiitVerse_swt",
+      "email": "shine_wunna_tun@miitverse.com",
+      "role": "admin",
+      "createdAt": "2026-09-08T12:07:25.446Z"
+    },
+    {
+      "id": "admin-MiitVerse_kl",
+      "username": "MiitVerse_kl",
+      "email": "kyaw_lin@miitverse.com",
+      "role": "admin",
+      "createdAt": "2026-09-08T12:07:25.446Z"
+    },
+    {
+      "id": "admin-MiitVerse_mk",
+      "username": "MiitVerse_mk",
+      "email": "minn_khant@miitverse.com",
+      "role": "admin",
+      "createdAt": "2026-09-08T12:07:25.446Z"
+    }
+  ]
+}

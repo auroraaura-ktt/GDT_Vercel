@@ -6,6 +6,7 @@ import Admin from '../pages/Admin'
 import AdminLogin from '../pages/AdminLogin'
 import ContactUs from '../pages/ContactUs'
 import Feed from '../pages/Feed'
+import Feedback from '../pages/Feedback'
 import Home from '../pages/Home'
 import Login from '../pages/Login'
 import PageDashboard from '../pages/PageDashboard'
@@ -19,6 +20,7 @@ export default function AppRoutes() {
       <Route path="/" element={<Home />} />
       <Route path="/about" element={<About />} />
       <Route path="/contact" element={<ContactUs />} />
+      <Route path="/feedback" element={<Feedback />} />
       <Route
         path="/feed"
         element={(

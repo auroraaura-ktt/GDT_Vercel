@@ -97,5 +97,81 @@
 
 /* Desktop tweak: make sure reaction modal overlay appears above everything */
 .reaction-modal-overlay {
+  position: fixed;
+  inset: 0;
   z-index: 3000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(11, 30, 79, .52);
+  backdrop-filter: blur(8px);
+}
+
+.reaction-modal {
+  width: min(100%, 560px);
+  max-height: min(760px, 92vh);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fff;
+  border: 1px solid #e4e9f3;
+  border-radius: 24px;
+  box-shadow: 0 28px 70px rgba(11, 30, 79, .25);
+}
+
+.reaction-modal-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: 24px 24px 18px;
+}
+
+.reaction-modal-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #d38f00;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+
+.reaction-modal h2 { margin: 0; color: #0b1e4f; font-size: 24px; }
+.reaction-modal-close { border: 0; background: #f4f6fa; color: #50617e; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; }
+.reaction-modal-tabs { display: flex; gap: 26px; padding: 0 24px; border-bottom: 1px solid #edf0f5; }
+.reaction-modal-tabs button { position: relative; border: 0; padding: 13px 0; background: transparent; color: #7b879b; font-weight: 700; cursor: pointer; }
+.reaction-modal-tabs button.active { color: #0b1e4f; }
+.reaction-modal-tabs button.active::after { content: ""; position: absolute; right: 0; bottom: -1px; left: 0; height: 3px; background: #f5b62d; border-radius: 4px 4px 0 0; }
+.reaction-modal-tabs span { display: inline-grid; min-width: 22px; margin-left: 5px; padding: 2px 5px; border-radius: 10px; background: #f1f4f8; font-size: 11px; }
+.reaction-modal-content { overflow-y: auto; }
+.comment-list, .like-list { padding: 8px 24px; }
+.comment-item, .like-item { display: flex; gap: 12px; padding: 16px 0; border-bottom: 1px solid #eef1f5; }
+.comment-avatar { flex: 0 0 38px; display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #f5b62d, #dd2a7b); color: #fff; font-size: 12px; font-weight: 800; }
+.comment-copy { min-width: 0; flex: 1; }
+.comment-meta { display: flex; gap: 8px; align-items: baseline; color: #0b1e4f; font-size: 14px; }
+.comment-meta time { color: #98a2b3; font-size: 11px; }
+.comment-name { display: inline-flex; align-items: center; gap: 5px; }
+.comment-copy p { margin: 6px 0 0; color: #45546f; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.comments-empty { display: grid; justify-items: center; gap: 7px; padding: 48px 20px; color: #7b879b; text-align: center; }
+.comments-empty strong { color: #0b1e4f; }
+.comments-empty-icon { display: grid; place-items: center; width: 46px; height: 46px; margin-bottom: 5px; border-radius: 15px; background: #fff5d9; color: #d38f00; font-size: 22px; }
+.comment-composer { display: flex; gap: 10px; padding: 18px 24px 22px; background: #fbfcfe; border-top: 1px solid #eef1f5; }
+.composer-avatar { background: #0b1e4f; }
+.composer-field { flex: 1; }
+.composer-field textarea { width: 100%; box-sizing: border-box; resize: vertical; border: 1px solid #dce3ed; border-radius: 12px; padding: 10px 12px; color: #0b1e4f; font: inherit; outline: none; }
+.composer-field textarea:focus { border-color: #f5b62d; box-shadow: 0 0 0 3px rgba(245, 182, 45, .15); }
+.composer-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; color: #98a2b3; font-size: 11px; }
+.composer-footer button { border: 0; border-radius: 10px; padding: 9px 13px; background: #0b1e4f; color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; }
+.composer-footer button:disabled { cursor: not-allowed; opacity: .45; }
+.comment-error { margin: -12px 24px 18px; color: #b42318; font-size: 12px; }
+.like-item { align-items: center; }
+.like-item span { margin-left: auto; color: #98a2b3; font-size: 12px; }
+
+.reaction-modal-overlay {
+  z-index: 3000;
+}
+
+@media (max-width: 600px) {
+  .reaction-modal-overlay { padding: 0; align-items: end; }
+  .reaction-modal { max-height: 90vh; border-radius: 24px 24px 0 0; }
 }

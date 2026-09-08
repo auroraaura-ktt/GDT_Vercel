@@ -1,19 +1,13 @@
-import { mkdirSync, writeFileSync } from 'node:fs'
-import { dirname, resolve } from 'node:path'
-import { fileURLToPath } from 'node:url'
-
 import { driver } from '../config/neo4j.js'
 import bcrypt from 'bcryptjs'
 import {
   getUserFromMongo,
+  deleteUserFromMongo,
   persistUserToBothDatabases,
   setUserSuspensionInMongo,
+  setUserVerifiedInMongo,
 } from '../utils/userPersistence.js'
-
-const __filename = fileURLToPath(import.meta.url)
-const __dirname = dirname(__filename)
-
-const profileUploadDir = resolve(__dirname, '..', '..', 'data', 'uploads')
+import { storeImage } from '../utils/imageStore.js'
 
 function getUserProperties(node) {
   return node?.properties ?? node ?? {}
@@ -35,6 +29,7 @@ export async function getCurrentUser(req, res) {
           role: mongoUser.role,
           createdAt: mongoUser.createdAt,
           avatarUrl: mongoUser.avatarUrl || '',
+          verified: Boolean(mongoUser.verified),
         },
       })
     }
@@ -72,6 +67,7 @@ export async function getCurrentUser(req, res) {
         role: user.role,
         createdAt: user.createdAt,
         avatarUrl: user.avatarUrl || '',
+        verified: Boolean(user.verified),
       },
     })
   } finally {
@@ -161,8 +157,6 @@ export async function updateCurrentAvatar(req, res) {
   }
 
   try {
-    mkdirSync(profileUploadDir, { recursive: true })
-
     const extensionMap = {
       'image/jpeg': 'jpg',
       'image/png': 'png',
@@ -172,9 +166,8 @@ export async function updateCurrentAvatar(req, res) {
 
     const extension = extensionMap[req.file.mimetype] || 'jpg'
     const fileName = `avatar-${req.user.id}-${Date.now()}.${extension}`
-    const filePath = resolve(profileUploadDir, fileName)
 
-    writeFileSync(filePath, req.file.buffer)
+    await storeImage(req.file.buffer, fileName, req.file.mimetype)
 
     const avatarUrl = `/api/social/uploads/${fileName}`
     const mongoUser = await getUserFromMongo(req.user.id)
@@ -291,6 +284,7 @@ export async function listUsers(req, res, deps = {}) {
           email: user.email,
           role: user.role,
           suspended: Boolean(user.suspended),
+          verified: user.verified !== undefined ? Boolean(user.verified) : false,
           createdAt: user.createdAt,
         }
       }),
@@ -396,8 +390,81 @@ export async function setUserSuspension(req, res) {
   }
 }
 
-export async function deleteUser(req, res) {
+export async function setUserVerified(req, res) {
+  const { verified } = req.body || {}
+  const userId = req.params.id
+
+  if (typeof verified !== 'boolean') {
+    return res.status(400).json({ message: 'verified must be a boolean' })
+  }
+
   const session = driver.session()
+  try {
+    const existing = await session.executeRead((tx) =>
+      tx.run(
+        `
+          MATCH (user:User { id: $id })
+          RETURN user
+          LIMIT 1
+        `,
+        { id: userId }
+      )
+    )
+
+    if (existing.records.length === 0) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    const targetUser = getUserProperties(existing.records[0].get('user'))
+
+    // Blue mark applies to regular users and page accounts, never to admins.
+    if (targetUser.role === 'admin') {
+      return res.status(403).json({ message: 'Admin accounts cannot receive a blue mark' })
+    }
+
+    const result = await session.executeWrite((tx) =>
+      tx.run(
+        `
+          MATCH (user:User { id: $id })
+          SET user.verified = $verified
+          RETURN user
+        `,
+        { id: userId, verified }
+      )
+    )
+
+    if (result.records.length === 0) {
+      return res.status(404).json({ message: 'User not found' })
+    }
+
+    const updatedUser = getUserProperties(result.records[0].get('user'))
+    try {
+      await setUserVerifiedInMongo(userId, verified)
+    } catch (error) {
+      console.warn('MongoDB verified update failed:', error.message)
+    }
+
+    return res.json({
+      message: verified ? 'Blue mark enabled for user' : 'Blue mark disabled for user',
+      user: {
+        id: updatedUser.id,
+        username: updatedUser.username,
+        email: updatedUser.email,
+        role: updatedUser.role,
+        verified: Boolean(updatedUser.verified),
+        suspended: Boolean(updatedUser.suspended),
+        createdAt: updatedUser.createdAt,
+      },
+    })
+  } finally {
+    await session.close()
+  }
+}
+
+export async function deleteUser(req, res, deps = {}) {
+  const driverInstance = deps.driver || driver
+  const mongoDeleter = deps.mongoDeleter || deleteUserFromMongo
+  const session = driverInstance.session()
 
   try {
     const result = await session.executeWrite((tx) =>
@@ -417,8 +484,15 @@ export async function deleteUser(req, res) {
       ? deletedCountValue.toNumber()
       : Number(deletedCountValue || 0)
 
-    if (deletedCount === 0) {
-      return res.status(404).json({ message: 'User not found' })
+    try {
+      const mongoUser = await mongoDeleter(req.params.id)
+
+      if (deletedCount === 0 && !mongoUser) {
+        return res.status(404).json({ message: 'User not found' })
+      }
+    } catch (error) {
+      console.warn('MongoDB user deletion failed:', error.message)
+      return res.status(500).json({ message: 'Failed to delete user from all databases' })
     }
 
     return res.json({ message: 'User deleted successfully' })

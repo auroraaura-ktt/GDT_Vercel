@@ -13,13 +13,27 @@ export function isMongoUnavailableError(error) {
   return /whitelist|server selection timed out|topology|econnrefused|etimedout|timeout|timed out|no servers|connection failed|not reachable|unavailable|not whitelisted|ip address|notwritableprimary|not primary|primary stepped down/i.test(combined)
 }
 
-function resolveMongoUri() {
+export function resolveMongoUri() {
   // env.mongodbUri normalizes Atlas connection options, including removal of
   // directConnection=true so the driver can follow primary elections.
   const uri = normalize(env.mongodbUri || process.env.MONGODB_URI)
 
   if (uri) {
-    return uri
+    try {
+      const parsed = new URL(uri)
+      const configuredDatabase = normalize(process.env.MONGODB_DATABASE || env.mongodbDatabase || 'test')
+      const pathname = parsed.pathname && parsed.pathname !== '/' ? parsed.pathname : `/${configuredDatabase}`
+      parsed.pathname = pathname
+      if (parsed.username) {
+        parsed.username = encodeURIComponent(decodeURIComponent(parsed.username))
+      }
+      if (parsed.password) {
+        parsed.password = encodeURIComponent(decodeURIComponent(parsed.password))
+      }
+      return parsed.toString()
+    } catch {
+      return uri
+    }
   }
 
   const host = normalize(process.env.MONGODB_HOST)

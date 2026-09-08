@@ -14,6 +14,15 @@ export default function Login() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate('/')
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
     setError('')
@@ -52,7 +61,7 @@ export default function Login() {
             navigate(`/page/${encodeURIComponent(pageData.page.slug)}`, { replace: true })
             return
           }
-        } catch (e) {
+        } catch {
           // fallback to inferred slug
         }
 
@@ -95,6 +104,9 @@ export default function Login() {
 
       <div className="form-section">
         <div className="auth-container">
+          <button type="button" className="auth-back-btn" onClick={handleBack}>
+            ← Back
+          </button>
           <h2>Login</h2>
           <p style={{ textAlign: 'center', color: '#8892b0', marginBottom: '24px' }}>
             Use your account to access MiitVerse.
@@ -126,6 +138,7 @@ export default function Login() {
             {error && <p style={{ color: '#ff6b6b', fontSize: '14px', marginBottom: '16px' }}>{error}</p>}
 
             <button type="submit" className="auth-btn" disabled={loading}>
+              {loading && <span className="button-spinner" aria-hidden="true" />}
               {loading ? 'Signing in...' : 'Login'}
             </button>
           </form>

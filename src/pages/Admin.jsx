@@ -1,6 +1,10 @@
 ﻿import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '../context/useAuth'
-import { apiRequest } from '../lib/api'
+import { apiRequest, resolveApiUrl } from '../lib/api'
+import { invalidateVerifiedAuthorsCache } from '../lib/useVerifiedAuthors'
+import LoadingState from '../components/LoadingState'
+import VerifiedBadge from '../components/VerifiedBadge'
+import { FaStar } from 'react-icons/fa'
 import './Admin.css'
 
 export default function Admin() {
@@ -46,18 +50,41 @@ export default function Admin() {
   const [postsList, setPostsList] = useState([])
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [postsFilter, setPostsFilter] = useState('all') // all | user | page | suspended
-  const [reportRows, setReportRows] = useState([
-    { id: 'r-101', reporter: 'Jane Doe', type: 'Inappropriate Post', status: 'Open', target: 'Campus Event Reminder', author: 'MIIT Student Club' },
-    { id: 'r-102', reporter: 'Alex Kim', type: 'Spam', status: 'Investigating', target: 'Free giveaway link', author: 'Random Account' },
-    { id: 'r-103', reporter: 'May Win', type: 'Harassment', status: 'Open', target: 'Offensive comment thread', author: 'User A12' },
-    { id: 'r-104', reporter: 'Leo Tan', type: 'Misinformation', status: 'Resolved', target: 'Fake exam timetable', author: 'Page Admin' },
-  ])
+  const [reportRows, setReportRows] = useState([])
+  const [loadingReports, setLoadingReports] = useState(false)
   const [expandedReportId, setExpandedReportId] = useState(null)
+
+  const [feedbackRows, setFeedbackRows] = useState([])
+  const [loadingFeedback, setLoadingFeedback] = useState(false)
 
   const [inviteEmails, setInviteEmails] = useState('')
   const [inviteMessage, setInviteMessage] = useState({ type: '', text: '' })
   const [inviteResults, setInviteResults] = useState(null)
   const [inviting, setInviting] = useState(false)
+  const [inviteHistory, setInviteHistory] = useState([])
+  const [loadingInviteHistory, setLoadingInviteHistory] = useState(false)
+  const [inviteHistoryError, setInviteHistoryError] = useState('')
+
+  const loadInviteHistory = useCallback(async () => {
+    setLoadingInviteHistory(true)
+    setInviteHistoryError('')
+    try {
+      const data = await apiRequest('/auth/invitations/history', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setInviteHistory(data.history || [])
+    } catch (err) {
+      setInviteHistoryError(err.message || 'Failed to load invitation history')
+    } finally {
+      setLoadingInviteHistory(false)
+    }
+  }, [token])
+
+  const [usersTab, setUsersTab] = useState('regular') // regular | admin
+  const [updatingVerified, setUpdatingVerified] = useState(false)
+  const [verifyingUserId, setVerifyingUserId] = useState(null)
+  const [updatingPageVerified, setUpdatingPageVerified] = useState(null)
+  const [selectedPage, setSelectedPage] = useState(null)
 
   const loadUsers = useCallback(async () => {
     setLoadingUsers(true)
@@ -97,6 +124,75 @@ export default function Admin() {
     }
   }, [token])
 
+  const loadReports = useCallback(async () => {
+    setLoadingReports(true)
+    try {
+      const data = await apiRequest('/social/reports', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setReportRows(data.reports || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load reports')
+      setReportRows([])
+    } finally {
+      setLoadingReports(false)
+    }
+  }, [token])
+
+  const handleReportStatusChange = async (reportId, status) => {
+    try {
+      const data = await apiRequest(`/social/reports/${encodeURIComponent(reportId)}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ status }),
+      })
+      setReportRows((currentRows) => currentRows.map((item) => item.id === reportId ? data.report : item))
+      setExpandedReportId(null)
+    } catch (err) {
+      setError(err.message || 'Failed to update report')
+    }
+  }
+
+  const handleDeleteReport = async (reportId) => {
+    try {
+      await apiRequest(`/social/reports/${encodeURIComponent(reportId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setReportRows((currentRows) => currentRows.filter((item) => item.id !== reportId))
+      setExpandedReportId(null)
+    } catch (err) {
+      setError(err.message || 'Failed to delete report')
+    }
+  }
+
+  const loadFeedback = useCallback(async () => {
+    setLoadingFeedback(true)
+    try {
+      const data = await apiRequest('/feedback', {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setFeedbackRows(data.feedback || [])
+    } catch (err) {
+      setError(err.message || 'Failed to load feedback')
+      setFeedbackRows([])
+    } finally {
+      setLoadingFeedback(false)
+    }
+  }, [token])
+
+  const handleDeleteFeedback = async (feedbackId) => {
+    try {
+      await apiRequest(`/feedback/${encodeURIComponent(feedbackId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      setFeedbackRows((currentRows) => currentRows.filter((item) => item.id !== feedbackId))
+    } catch (err) {
+      setError(err.message || 'Failed to delete feedback')
+    }
+  }
+
   const handleFormChange = (e) => {
     const { name, value } = e.target
     setFormData((prev) => ({
@@ -134,7 +230,7 @@ export default function Admin() {
 
     const emails = inviteEmails
       .split(/[,\n;]+/)
-      .map((email) => email.trim())
+      .map((email) => email.trim().toLowerCase())
       .filter(Boolean)
 
     if (emails.length === 0) {
@@ -162,6 +258,7 @@ export default function Admin() {
       setInviteResults(data)
       if (data.invited.length > 0) {
         setInviteEmails('')
+        loadInviteHistory()
       }
     } catch (err) {
       setInviteMessage({
@@ -331,6 +428,26 @@ export default function Admin() {
     }
   }
 
+  const handleDeletePageAccount = async (targetPage) => {
+    try {
+      await apiRequest(`/users/${targetPage.id}`, {
+        method: 'DELETE',
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+      setPages((currentPages) => currentPages.filter((item) => item.id !== targetPage.id))
+      if (selectedPage?.id === targetPage.id) {
+        setSelectedPage(null)
+        setActiveSection('page-accounts')
+      }
+      setPageAccountMessage({ type: 'success', text: `Page account "${targetPage.pageName || targetPage.email}" deleted successfully.` })
+      await loadPages()
+    } catch (err) {
+      setPageAccountMessage({ type: 'error', text: err.message || 'Failed to delete page account' })
+    }
+  }
+
   const openUserDetails = (userItem) => {
     setSelectedUser(userItem)
     setUserActionMessage({ type: '', text: '' })
@@ -361,6 +478,88 @@ export default function Admin() {
     }
   }
 
+  const handleToggleVerified = async () => {
+    if (!selectedUser) return
+    const nextVerified = !selectedUser.verified
+    setUpdatingVerified(true)
+    setUserActionMessage({ type: '', text: '' })
+    try {
+      const data = await apiRequest(`/users/${encodeURIComponent(selectedUser.id)}/verified`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ verified: nextVerified }),
+      })
+      const updatedUser = { ...selectedUser, ...data.user }
+      setSelectedUser(updatedUser)
+      setUsers((currentUsers) => currentUsers.map((item) => item.id === updatedUser.id ? { ...item, ...updatedUser } : item))
+      invalidateVerifiedAuthorsCache()
+      setUserActionMessage({ type: 'success', text: data.message })
+    } catch (err) {
+      setUserActionMessage({ type: 'error', text: err.message || 'Failed to update blue mark status' })
+    } finally {
+      setUpdatingVerified(false)
+    }
+  }
+
+  // Toggle verification directly from the Manage Users list (Admin only).
+  const handleListToggleVerified = async (targetUser) => {
+    if (!targetUser?.id) return
+    const nextVerified = !targetUser.verified
+    setVerifyingUserId(targetUser.id)
+    setError(null)
+    try {
+      const data = await apiRequest(`/users/${encodeURIComponent(targetUser.id)}/verified`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ verified: nextVerified }),
+      })
+      const updatedUser = { ...targetUser, ...data.user }
+      setUsers((currentUsers) => currentUsers.map((item) => item.id === updatedUser.id ? { ...item, ...updatedUser } : item))
+      invalidateVerifiedAuthorsCache()
+      if (selectedUser?.id === updatedUser.id) {
+        setSelectedUser(updatedUser)
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to update blue mark status')
+    } finally {
+      setVerifyingUserId(null)
+    }
+  }
+
+  const handleTogglePageVerified = async (pageItem) => {
+    const nextVerified = pageItem.verified === false
+    setUpdatingPageVerified(pageItem.id)
+    setPageAccountMessage({ type: '', text: '' })
+    try {
+      const data = await apiRequest(`/auth/pages/${encodeURIComponent(pageItem.id)}/verified`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ verified: nextVerified }),
+      })
+      const updatedPage = { ...pageItem, verified: data.page?.verified ?? nextVerified }
+      setPages((currentPages) => currentPages.map((item) => item.id === updatedPage.id ? { ...item, ...updatedPage } : item))
+      if (selectedPage?.id === updatedPage.id) {
+        setSelectedPage(updatedPage)
+      }
+      // Republish the shared verified-accounts set so every open Feed (this
+      // tab and other tabs) re-resolves the blue mark immediately for all of
+      // the page's past, current, and future posts.
+      invalidateVerifiedAuthorsCache()
+      setPageAccountMessage({ type: 'success', text: data.message })
+    } catch (err) {
+      setPageAccountMessage({ type: 'error', text: err.message || 'Failed to update page blue mark' })
+    } finally {
+      setUpdatingPageVerified(null)
+    }
+  }
+
+  const openPageDetails = (pageItem) => {
+    setSelectedPage(pageItem)
+    setPageAccountMessage({ type: '', text: '' })
+    setActiveSection('page-details')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const requestUserSuspension = () => {
     if (!selectedUser || selectedUser.id === user?.id) return
     setUserConfirmation({
@@ -374,12 +573,21 @@ export default function Admin() {
     setUserConfirmation({ type: 'delete', user: selectedUser })
   }
 
+  const requestPageDeletion = () => {
+    if (!selectedPage) return
+    setUserConfirmation({ type: 'delete', user: selectedPage })
+  }
+
   const confirmUserAction = async () => {
     if (!userConfirmation) return
     const { type: actionType, user: targetUser } = userConfirmation
     setUserConfirmation(null)
 
     if (actionType === 'delete') {
+      if (targetUser.role === 'page') {
+        await handleDeletePageAccount(targetUser)
+        return
+      }
       await handleDeleteUser(targetUser.id, targetUser.fullName || targetUser.username)
       return
     }
@@ -395,23 +603,14 @@ export default function Admin() {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      const fetchedPages = await (async () => {
-        try {
-          const pagesData = await apiRequest('/auth/pages', { headers: { Authorization: `Bearer ${token}` } })
-          return pagesData.pages || []
-        } catch (e) {
-          return pages || []
-        }
-      })()
-
       const posts = (data.posts || []).map((p) => {
-        const matchedPage = (fetchedPages || []).find((pg) => pg.id === p.userId)
-        const isPage = Boolean(matchedPage)
+        const authorType = p.authorType || (p.source === 'page' || p.postType === 'page' ? 'page' : 'user')
         return {
           ...p,
-          source: isPage ? 'page' : 'user',
+          source: authorType,
+          authorType,
           author: p.username || p.author || 'User',
-          pageName: matchedPage?.pageName || null,
+          pageName: p.pageName || null,
         }
       })
 
@@ -457,6 +656,8 @@ export default function Admin() {
   }
 
   const newestUsers = users.slice(0, 6)
+  const regularUsers = users.filter((userItem) => userItem.role !== 'admin')
+  const adminUsers = users.filter((userItem) => userItem.role === 'admin')
 
   useEffect(() => {
     if (activeSection === 'users') {
@@ -466,10 +667,26 @@ export default function Admin() {
     if (activeSection === 'page-accounts') {
       loadPages()
     }
+    if (activeSection === 'invitations') {
+      loadInviteHistory()
+    }
     if (activeSection === 'posts') {
       loadAllPosts()
     }
-  }, [activeSection, loadUsers, loadPages])
+    if (activeSection === 'reports') {
+      loadReports()
+    }
+    if (activeSection === 'feedback') {
+      loadFeedback()
+    }
+    if (activeSection === 'dashboard') {
+      loadUsers()
+      loadPages({ reportError: false })
+      loadAllPosts()
+      loadReports()
+      loadFeedback()
+    }
+  }, [activeSection, loadUsers, loadPages, loadInviteHistory, loadReports, loadFeedback])
 
   const sidebarItems = [
     { key: 'dashboard', label: '📊 Dashboard' },
@@ -478,6 +695,7 @@ export default function Admin() {
     { key: 'posts', label: '📝 Posts' },
     { key: 'invitations', label: '✉ Invitations' },
     { key: 'reports', label: '🚩 Reports' },
+    { key: 'feedback', label: '⭐ Feedback' },
   ]
 
   const pageTitles = {
@@ -487,7 +705,9 @@ export default function Admin() {
     posts: 'Posts',
     invitations: 'Invitations',
     reports: 'Reports',
+    feedback: 'User Feedback',
     'user-details': 'User Details',
+    'page-details': 'Page Account Details',
   }
 
   const pageDescriptions = {
@@ -497,13 +717,27 @@ export default function Admin() {
     posts: 'Manage posts and content moderation.',
     invitations: 'Invite users via email and send a registration link.',
     reports: 'Review flagged reports and moderation tasks.',
+    feedback: 'Review star ratings and feedback submitted by users.',
     'user-details': 'Review account information and complete management actions.',
+    'page-details': 'Manage this page account, its blue mark and dashboard access.',
   }
 
   const goToSection = (key) => {
     setActiveSection(key)
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
+
+  const dashboardMetrics = [
+    { label: 'Users', value: users.length, color: 'blue' },
+    { label: 'Pages', value: pages.length, color: 'gold' },
+    { label: 'Posts', value: postsList.length, color: 'green' },
+    { label: 'Reports', value: reportRows.length, color: 'red' },
+    { label: 'Feedback', value: feedbackRows.length, color: 'purple' },
+  ]
+  const dashboardChartMax = Math.max(...dashboardMetrics.map((metric) => metric.value), 1)
+  const dashboardChartPoints = dashboardMetrics
+    .map((metric, index) => `${34 + index * 84},${128 - (metric.value / dashboardChartMax) * 92}`)
+    .join(' ')
 
   const renderContent = () => {
     switch (activeSection) {
@@ -516,46 +750,129 @@ export default function Admin() {
                 <p>Load and manage all registered accounts from this page.</p>
               </div>
 
-              {loadingUsers && <p>Loading users...</p>}
-              {error && <p className="error-text">{error}</p>}
+              <div className="admin-users-tabs">
+                <button
+                  type="button"
+                  className={`admin-users-tab ${usersTab === 'regular' ? 'active' : ''}`}
+                  onClick={() => setUsersTab('regular')}
+                >
+                  👤 Regular Users ({regularUsers.length})
+                </button>
+                <button
+                  type="button"
+                  className={`admin-users-tab ${usersTab === 'admin' ? 'active' : ''}`}
+                  onClick={() => setUsersTab('admin')}
+                >
+                  🛡 Admin Accounts ({adminUsers.length})
+                </button>
+                <button type="button" className="admin-users-refresh" onClick={() => loadUsers()}>↻ Refresh</button>
+              </div>
 
-              {!loadingUsers && users.length === 0 && !error && (
-                <p>No users loaded yet. Use the sidebar to refresh this view.</p>
+              {usersTab === 'regular' && (
+                <>
+                  {loadingUsers && <LoadingState label="Loading users" compact />}
+                  {error && <p className="error-text">{error}</p>}
+
+                  {!loadingUsers && regularUsers.length === 0 && !error && (
+                    <p>No regular user accounts found yet.</p>
+                  )}
+
+                  {regularUsers.length > 0 && (
+                    <div className="admin-users-table-wrap">
+                      <table className="admin-users-table">
+                        <thead>
+                          <tr>
+                            <th>Full Name</th>
+                            <th>Email</th>
+                            <th>Role</th>
+                            <th>Blue Mark</th>
+                            <th>Status</th>
+                            <th>Created At</th>
+                            <th>Action</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {regularUsers.map((userItem) => (
+                            <tr key={userItem.id}>
+                              <td>
+                                <span className="admin-name-cell">
+                                  {userItem.fullName || userItem.username}
+                                  {userItem.verified && <VerifiedBadge size="small" />}
+                                </span>
+                              </td>
+                              <td>{userItem.email}</td>
+                              <td>{userItem.role}</td>
+                              <td>
+                                <div className="admin-verify-cell">
+                                  {userItem.verified
+                                    ? <span className="admin-verified-badge" title="Blue mark enabled">✔ Verified</span>
+                                    : <span className="admin-unverified-badge" title="Blue mark disabled">Not Verified</span>}
+                                  <button
+                                    type="button"
+                                    className={`admin-verify-toggle-btn ${userItem.verified ? 'enabled' : ''}`}
+                                    disabled={verifyingUserId === userItem.id}
+                                    title={userItem.verified ? 'Remove Verification' : 'Mark as Verified'}
+                                    onClick={() => handleListToggleVerified(userItem)}
+                                  >
+                                    {verifyingUserId === userItem.id
+                                      ? <span className="button-spinner" aria-hidden="true" />
+                                      : null}
+                                    {verifyingUserId === userItem.id
+                                      ? 'Updating…'
+                                      : userItem.verified
+                                        ? 'Remove Verification'
+                                        : 'Mark as Verified'}
+                                  </button>
+                                </div>
+                              </td>
+                              <td>
+                                <span className={`admin-status-badge ${userItem.suspended ? 'suspended' : 'active'}`}>
+                                  {userItem.suspended ? 'Suspended' : 'Active'}
+                                </span>
+                              </td>
+                              <td>{new Date(userItem.createdAt).toLocaleString()}</td>
+                              <td className="admin-action-cell">
+                                <button
+                                  type="button"
+                                  className="admin-more-actions-btn"
+                                  onClick={() => openUserDetails(userItem)}
+                                >
+                                  More actions →
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </>
               )}
 
-              {users.length > 0 && (
-                <div className="admin-users-table-wrap">
-                  <table className="admin-users-table">
-                    <thead>
-                      <tr>
-                        <th>Full Name</th>
-                        <th>Email</th>
-                        <th>Role</th>
-                        <th>Created At</th>
-                        <th>Action</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {users.map((userItem) => (
-                        <tr key={userItem.id}>
-                          <td>{userItem.fullName || userItem.username}</td>
-                          <td>{userItem.email}</td>
-                          <td>{userItem.role}</td>
-                          <td>{new Date(userItem.createdAt).toLocaleString()}</td>
-                          <td className="admin-action-cell">
-                            <button
-                              type="button"
-                              className="admin-more-actions-btn"
-                              onClick={() => openUserDetails(userItem)}
-                            >
-                              More actions →
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                            {usersTab === 'admin' && (
+                <>
+                  {adminUsers.length === 0 && (<p>No admin accounts found.</p>)}
+                  {adminUsers.length > 0 && (
+                    <div className="admin-users-table-wrap">
+                      <table className="admin-users-table">
+                        <thead><tr><th>Full Name</th><th>Email</th><th>Role</th><th>Status</th><th>Created At</th><th>Action</th></tr></thead>
+                        <tbody>
+                          {adminUsers.map((userItem) => (
+                            <tr key={userItem.id}>
+                              <td>{userItem.fullName || userItem.username}</td>
+                              <td>{userItem.email}</td>
+                              <td>{userItem.role}</td>
+                              <td><span className={`admin-status-badge ${userItem.suspended ? 'suspended' : 'active'}`}>{userItem.suspended ? 'Suspended' : 'Active'}</span></td>
+                              <td>{new Date(userItem.createdAt).toLocaleString()}</td>
+                              <td className="admin-action-cell"><button type="button" className="admin-more-actions-btn" onClick={() => openUserDetails(userItem)}>More actions →</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  <p className="admin-page-note">🌐 Page accounts are managed in the Page Accounts section.</p>
+                </>
               )}
             </section>
           </>
@@ -582,9 +899,9 @@ export default function Admin() {
               <div className="admin-user-avatar">{initials}</div>
               <div className="admin-user-profile-copy">
                 <p className="admin-eyebrow">ACCOUNT PROFILE</p>
-                <h2>{displayName}</h2>
+                <h2>{displayName} {selectedUser.verified && <VerifiedBadge size="small" />}</h2>
                 <p>{selectedUser.email}</p>
-                <div className="admin-user-badges"><span className="admin-role-badge">{selectedUser.role || 'user'}</span><span className={`admin-status-badge ${selectedUser.suspended ? 'suspended' : 'active'}`}>{selectedUser.suspended ? 'Suspended' : 'Active'}</span></div>
+                <div className="admin-user-badges"><span className="admin-role-badge">{selectedUser.role || 'user'}</span><span className={`admin-status-badge ${selectedUser.suspended ? 'suspended' : 'active'}`}>{selectedUser.suspended ? 'Suspended' : 'Active'}</span>{selectedUser.verified && <span className="admin-verified-badge">✔ Blue Mark</span>}</div>
               </div>
             </div>
 
@@ -608,9 +925,78 @@ export default function Admin() {
                 <h3>Manage this account</h3>
                 <p>Actions take effect immediately. Use suspension to block sign-in without removing account data.</p>
                 <button type="button" className="admin-reset-btn" onClick={() => setResetPasswordUserId(selectedUser.id)}>Reset password</button>
-                <button type="button" className="admin-suspend-btn" disabled={isCurrentAdmin || updatingUserStatus} onClick={requestUserSuspension}>{updatingUserStatus ? 'Updating…' : selectedUser.suspended ? 'Restore account' : 'Suspend account'}</button>
+                {selectedUser.role !== 'admin' && (
+                  <button type="button" className={`admin-verified-btn ${selectedUser.verified ? 'enabled' : ''}`} disabled={updatingVerified} onClick={handleToggleVerified}>{updatingVerified && <span className="button-spinner" aria-hidden="true" />}{updatingVerified ? 'Updating…' : selectedUser.verified ? 'Disable Blue Mark' : 'Enable Blue Mark'}</button>
+                )}
+                {selectedUser.role === 'admin' && <small>Admin accounts cannot receive a blue mark.</small>}
+                <button type="button" className="admin-suspend-btn" disabled={isCurrentAdmin || updatingUserStatus} onClick={requestUserSuspension}>{updatingUserStatus && <span className="button-spinner" aria-hidden="true" />}{updatingUserStatus ? 'Updating…' : selectedUser.suspended ? 'Restore account' : 'Suspend account'}</button>
                 <button type="button" className="admin-delete-btn" disabled={isCurrentAdmin} onClick={requestUserDeletion}>Delete account</button>
                 {isCurrentAdmin && <small>You cannot suspend or delete your own admin account.</small>}
+              </section>
+            </div>
+          </section>
+        )
+      }
+      case 'page-details': {
+        if (!selectedPage) {
+          return (
+            <section className="admin-user-details-empty">
+              <h2>No page account selected</h2>
+              <p>Choose a page account from the Page Accounts section to view its details.</p>
+              <button type="button" className="admin-more-actions-btn" onClick={() => goToSection('page-accounts')}>Go to Page Accounts</button>
+            </section>
+          )
+        }
+
+        const pageDisplayName = selectedPage.pageName || 'MiitVerse page'
+        const pageInitials = pageDisplayName.split(' ').filter(Boolean).map((part) => part[0]?.toUpperCase()).join('').slice(0, 2) || 'P'
+
+        return (
+          <section className="admin-user-details">
+            <button type="button" className="admin-back-button" onClick={() => goToSection('page-accounts')}>← Back to Page Accounts</button>
+            <div className="admin-user-profile-card">
+              <div className="admin-user-avatar">{pageInitials}</div>
+              <div className="admin-user-profile-copy">
+                <p className="admin-eyebrow">PAGE ACCOUNT PROFILE</p>
+                <h2>{pageDisplayName} {selectedPage.verified && <VerifiedBadge size="small" />} {selectedPage.verified === false ? <span className="admin-unverified-badge">Not Verified</span> : <span className="admin-verified-badge">✔ Blue Mark</span>}</h2>
+                <p>{selectedPage.email}</p>
+                <div className="admin-user-badges"><span className="admin-role-badge">{selectedPage.role || 'page'}</span></div>
+              </div>
+            </div>
+
+            {pageAccountMessage.text && <p className={`message message-${pageAccountMessage.type}`}>{pageAccountMessage.text}</p>}
+
+            <div className="admin-user-details-grid">
+              <section className="admin-user-info-card">
+                <p className="admin-eyebrow">ACCOUNT INFORMATION</p>
+                <h3>Details</h3>
+                <dl>
+                  <div><dt>Page name</dt><dd>{pageDisplayName}</dd></div>
+                  <div><dt>Email address</dt><dd>{selectedPage.email}</dd></div>
+                  <div><dt>Page slug</dt><dd>{selectedPage.slug || '—'}</dd></div>
+                  <div><dt>Owner account</dt><dd>{selectedPage.ownerId || 'Not linked'}</dd></div>
+                  <div><dt>Created</dt><dd>{selectedPage.createdAt ? new Date(selectedPage.createdAt).toLocaleString() : 'Not available'}</dd></div>
+                  <div><dt>Account ID</dt><dd className="admin-user-id">{selectedPage.id}</dd></div>
+                </dl>
+              </section>
+
+              <section className="admin-user-actions-card">
+                <p className="admin-eyebrow">ADMIN ACTIONS</p>
+                <h3>Manage this page account</h3>
+                <p>Actions take effect immediately. The blue mark controls the verified badge shown next to this page's name and posts.</p>
+                <button
+                  type="button"
+                  className={`admin-verified-btn ${selectedPage.verified !== false ? 'enabled' : ''}`}
+                  disabled={updatingPageVerified === selectedPage.id}
+                  onClick={() => handleTogglePageVerified(selectedPage)}
+                >
+                  {updatingPageVerified === selectedPage.id && <span className="button-spinner" aria-hidden="true" />}
+                  {updatingPageVerified === selectedPage.id ? 'Updating…' : selectedPage.verified === false ? 'Enable Blue Mark' : 'Disable Blue Mark'}
+                </button>
+                <button type="button" className="admin-reset-btn" onClick={() => setResetPasswordUserId(selectedPage.ownerId || selectedPage.id)}>Reset password</button>
+                <a className="admin-button" href={`/page/${selectedPage.slug}`}>Open Dashboard</a>
+                <button type="button" className="admin-delete-btn" onClick={requestPageDeletion}>Delete page account</button>
+                <small>Posts published from this page's dashboard appear under "{pageDisplayName}", never under the admin account.</small>
               </section>
             </div>
           </section>
@@ -670,34 +1056,46 @@ export default function Admin() {
               </div>
 
               <button type="submit" className="form-submit" disabled={creatingPageAccount} onClick={handleCreatePageAccount}>
+                {creatingPageAccount && <span className="button-spinner" aria-hidden="true" />}
                 {creatingPageAccount ? 'Creating account...' : 'Create Page Account'}
               </button>
             </div>
 
             <div className="admin-users-table-wrap" style={{ marginTop: '24px' }}>
               <h3 style={{ marginBottom: '12px' }}>Created Pages</h3>
-              {loadingPages && <p>Loading pages...</p>}
+              {loadingPages && <LoadingState label="Loading pages" compact />}
               {!loadingPages && pages.length === 0 && <p>No pages created yet.</p>}
               {!loadingPages && pages.length > 0 && (
                 <div className="admin-page-list">
                   {pages.map((pageItem) => (
                     <div className="admin-page-card" key={pageItem.id}>
                       <div>
-                        <h4>{pageItem.pageName}</h4>
+                        <h4><span className="admin-name-cell">{pageItem.pageName} {pageItem.verified && <VerifiedBadge size="small" />}</span> {pageItem.verified === false ? <span className="admin-unverified-badge" title="Blue mark disabled">Not Verified</span> : <span className="admin-verified-badge" title="Blue mark enabled">✔ Blue Mark</span>}</h4>
                         <p>{pageItem.email}</p>
                       </div>
                       <div className="admin-page-card-actions">
                         <span className="admin-page-badge">{pageItem.role || 'page'}</span>
                         <button
                           type="button"
-                          className="admin-reset-btn"
-                          onClick={() => setResetPasswordUserId(pageItem.ownerId || pageItem.id)}
+                          className={`admin-verify-toggle-btn ${pageItem.verified === false ? '' : 'enabled'}`}
+                          disabled={updatingPageVerified === pageItem.id}
+                          title={pageItem.verified === false ? 'Mark as Verified' : 'Remove Verification'}
+                          onClick={() => handleTogglePageVerified(pageItem)}
                         >
-                          Reset Password
+                          {updatingPageVerified === pageItem.id && <span className="button-spinner" aria-hidden="true" />}
+                          {updatingPageVerified === pageItem.id
+                            ? 'Updating…'
+                            : pageItem.verified === false
+                              ? 'Mark as Verified'
+                              : 'Remove Verification'}
                         </button>
-                        <a className="admin-button" href={`/page/${pageItem.slug}`}>
-                          Open Dashboard
-                        </a>
+                        <button
+                          type="button"
+                          className="admin-more-actions-btn"
+                          onClick={() => openPageDetails(pageItem)}
+                        >
+                          More actions →
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -722,25 +1120,12 @@ export default function Admin() {
               <button type="button" onClick={() => loadAllPosts()} style={{ marginLeft: '12px' }}>Refresh</button>
             </div>
 
-            <form className="admin-create-form" onSubmit={handleCreateTestPost} style={{ marginBottom: '20px' }}>
-              <h3>Create post</h3>
-              {testPostMessage.text && <p className={`message message-${testPostMessage.type}`}>{testPostMessage.text}</p>}
-              <div className="form-group">
-                <label htmlFor="postAuthor">Display name (optional)</label>
-                <input id="postAuthor" name="author" value={testPostData.author} onChange={handleTestPostChange} disabled={creatingTestPost} />
-              </div>
-              <div className="form-group">
-                <label htmlFor="postContent">Content</label>
-                <textarea id="postContent" name="content" value={testPostData.content} onChange={handleTestPostChange} disabled={creatingTestPost} required />
-              </div>
-              <div className="form-group">
-                <label htmlFor="postImage">Image URL (optional)</label>
-                <input id="postImage" name="image" type="url" value={testPostData.image} onChange={handleTestPostChange} disabled={creatingTestPost} />
-              </div>
-              <button type="submit" disabled={creatingTestPost}>{creatingTestPost ? 'Saving…' : 'Publish post'}</button>
-            </form>
+            <div className="admin-invite-link" style={{ marginBottom: '20px' }}>
+              <strong>Note:</strong>
+              <span>Admin accounts cannot publish posts. To publish, open a page account's dashboard from the Page Accounts section — posts are published under the page's full name.</span>
+            </div>
 
-            {loadingPosts && <p>Loading posts...</p>}
+            {loadingPosts && <LoadingState label="Loading posts" compact />}
 
             {!loadingPosts && postsList.length === 0 && (
               <p>No posts found.</p>
@@ -758,11 +1143,13 @@ export default function Admin() {
                   <div key={post.id} className="admin-post-row">
                     <div style={{ flex: 1 }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <strong>{post.source === 'page' ? `${post.pageName} (page)` : post.author}</strong>
+                        <strong>{post.source === 'page' ? (post.pageName || post.author) : post.author} <small>({post.authorType === 'page' ? 'Page' : 'User'})</small></strong>
                         <small>{post.createdAt ? new Date(post.createdAt).toLocaleString() : ''}</small>
                       </div>
+                      <small>Post ID: {post.id} · Author ID: {post.userId}</small>
                       <p style={{ marginTop: '6px' }}>{post.content}</p>
-                      {post.image ? <img src={post.image} alt="post" style={{ maxWidth: '240px', marginTop: '6px' }} /> : null}
+                      {post.image ? <img src={resolveApiUrl(post.image.replace(/^\/api(?=\/)/, ''))} alt="post" style={{ maxWidth: '240px', marginTop: '6px', objectFit: 'cover' }} onError={(event) => { event.currentTarget.style.display = 'none' }} /> : null}
+                      <small>Reactions: {Math.max(Number(post.likes || 0), Array.isArray(post.likedBy) ? post.likedBy.length : 0)} · Comments: {Array.isArray(post.comments) ? post.comments.length : Number(post.comments || 0)} · Shares: {Number(post.shares ?? post.reposts ?? 0)} · Visibility: {post.visibility || 'public'}</small>
                     </div>
                     <div className="admin-post-actions">
                       <button type="button" className="admin-delete-btn" onClick={() => handleDeletePost(post)}>Delete</button>
@@ -783,6 +1170,11 @@ export default function Admin() {
                 <h2>Send Invitations</h2>
                 <p>Invite MIIT users by entering one or more email addresses. Each invite includes a registration link with an embedded action button.</p>
               </div>
+            </div>
+
+            <div className="admin-invite-link">
+              <strong>Invitation Link:</strong>
+              <a href="https://miitverse-xi.vercel.app/register" target="_blank" rel="noreferrer">https://miitverse-xi.vercel.app</a>
             </div>
 
             {inviteMessage.text && (
@@ -808,6 +1200,7 @@ export default function Admin() {
               </div>
 
               <button type="submit" className="form-submit" disabled={inviting}>
+                {inviting && <span className="button-spinner" aria-hidden="true" />}
                 {inviting ? 'Sending invitations...' : 'Send invitations'}
               </button>
             </form>
@@ -834,6 +1227,57 @@ export default function Admin() {
                 )}
               </div>
             )}
+
+            <div className="admin-invite-history" style={{ marginTop: '28px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
+                <h3 style={{ margin: 0 }}>📨 Invitation Delivery History</h3>
+                <button type="button" className="admin-users-refresh" onClick={() => loadInviteHistory()}>↻ Refresh</button>
+              </div>
+
+              {loadingInviteHistory && <LoadingState label="Loading invitation history" compact />}
+              {inviteHistoryError && <p className="error-text">{inviteHistoryError}</p>}
+
+              {!loadingInviteHistory && !inviteHistoryError && inviteHistory.length === 0 && (
+                <p>No invitations have been sent yet.</p>
+              )}
+
+              {!loadingInviteHistory && inviteHistory.length > 0 && (
+                <div className="admin-users-table-wrap">
+                  <table className="admin-users-table">
+                    <thead>
+                      <tr>
+                        <th>Invited To</th>
+                        <th>Subject</th>
+                        <th>Delivery Status</th>
+                        <th>Last Event At</th>
+                        <th>Opens</th>
+                        <th>Clicks</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {inviteHistory.map((item) => (
+                        <tr key={item.id}>
+                          <td>{item.to}</td>
+                          <td>{item.subject}</td>
+                          <td>
+                            <span className={`admin-status-badge ${item.status === 'delivered' ? 'active' : item.status === 'delivered_as_expected' ? 'active' : 'suspended'}`}>
+                              {item.status}
+                            </span>
+                          </td>
+                          <td>{item.lastEventTime ? new Date(item.lastEventTime).toLocaleString() : '—'}</td>
+                          <td>{item.opensCount}</td>
+                          <td>{item.clicksCount}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+
+              <small style={{ display: 'block', marginTop: '10px', color: '#6b7280' }}>
+                Delivery data comes from the email provider (SendGrid). "Delivered" means the email reached the recipient's mail server — if it can't be found in the inbox, ask the recipient to check their Junk/Spam folder.
+              </small>
+            </div>
           </section>
         )
       case 'reports':
@@ -845,6 +1289,9 @@ export default function Admin() {
             </div>
 
             <div className="admin-users-table-wrap admin-report-table-wrap">
+              {loadingReports && <LoadingState label="Loading reports" compact />}
+              {!loadingReports && reportRows.length === 0 && <p>No user reports have been submitted.</p>}
+              {!loadingReports && reportRows.length > 0 && (
               <table className="admin-users-table admin-reports-table">
                 <thead>
                   <tr>
@@ -884,16 +1331,10 @@ export default function Admin() {
                           {expandedReportId === report.id && (
                             <div className="admin-report-action-menu">
                               <button type="button" onClick={() => window.alert(`Previewing report: ${report.target}`)}>Preview</button>
-                              <button type="button" onClick={() => {
-                                setReportRows((currentRows) => currentRows.map((item) => item.id === report.id ? { ...item, status: 'Resolved' } : item));
-                                setExpandedReportId(null);
-                              }}>
+                              <button type="button" onClick={() => handleReportStatusChange(report.id, 'Resolved')}>
                                 Resolve
                               </button>
-                              <button type="button" className="admin-delete-btn" onClick={() => {
-                                setReportRows((currentRows) => currentRows.filter((item) => item.id !== report.id));
-                                setExpandedReportId(null);
-                              }}>
+                              <button type="button" className="admin-delete-btn" onClick={() => handleDeleteReport(report.id)}>
                                 Delete
                               </button>
                             </div>
@@ -904,6 +1345,63 @@ export default function Admin() {
                   ))}
                 </tbody>
               </table>
+              )}
+            </div>
+          </section>
+        )
+      case 'feedback':
+        return (
+          <section className="admin-page-accounts">
+            <div className="admin-create-header">
+              <h2>{pageTitles[activeSection]}</h2>
+              <p>{pageDescriptions[activeSection]}</p>
+            </div>
+
+            <div className="admin-users-table-wrap admin-report-table-wrap">
+              {loadingFeedback && <LoadingState label="Loading feedback" compact />}
+              {!loadingFeedback && feedbackRows.length === 0 && <p>No user feedback has been submitted yet.</p>}
+              {!loadingFeedback && feedbackRows.length > 0 && (
+              <table className="admin-users-table admin-reports-table">
+                <thead>
+                  <tr>
+                    <th>User</th>
+                    <th>Rating</th>
+                    <th>Feedback</th>
+                    <th>Date</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {feedbackRows.map((item) => (
+                    <tr key={item.id}>
+                      <td>{item.username}</td>
+                      <td>
+                        <span className="admin-feedback-stars">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <FaStar
+                              key={star}
+                              className={star <= item.rating ? 'filled' : ''}
+                            />
+                          ))}
+                          <span className="admin-feedback-rating-num">{item.rating}/5</span>
+                        </span>
+                      </td>
+                      <td className="admin-feedback-message">{item.message}</td>
+                      <td>{new Date(item.createdAt || Date.now()).toLocaleString()}</td>
+                      <td className="admin-report-action-cell">
+                        <button
+                          type="button"
+                          className="admin-delete-btn"
+                          onClick={() => handleDeleteFeedback(item.id)}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              )}
             </div>
           </section>
         )
@@ -913,20 +1411,89 @@ export default function Admin() {
             <section id="dashboard" className="stats-grid">
               <div className="stat-card">
                 <h3>👥 Users</h3>
-                <h2>{users.length || 12540}</h2>
-                <p>+8% this month</p>
+                <h2>{users.length}</h2>
+                <p>Regular registered users</p>
+              </div>
+
+              <div className="stat-card">
+                <h3>🌐 Page Accounts</h3>
+                <h2>{pages.length}</h2>
+                <p>Official MIIT pages</p>
               </div>
 
               <div className="stat-card">
                 <h3>📝 Posts</h3>
-                <h2>48,221</h2>
-                <p>+15% this month</p>
+                <h2>{postsList.length}</h2>
+                <p>User &amp; page posts</p>
               </div>
 
               <div className="stat-card">
-                <h3>� Reports</h3>
-                <h2>18</h2>
-                <p>Needs review</p>
+                <h3>🚩 Reports</h3>
+                <h2>{reportRows.length}</h2>
+                <p>{reportRows.filter((r) => r.status !== 'Resolved').length} need review</p>
+              </div>
+
+              <div className="stat-card">
+                <h3>⭐ Feedback</h3>
+                <h2>{feedbackRows.length}</h2>
+                <p>Star ratings &amp; reviews</p>
+              </div>
+            </section>
+
+            <section className="dashboard-quick-actions">
+              <button type="button" onClick={() => goToSection('users')}>👥 Manage Users</button>
+              <button type="button" onClick={() => goToSection('page-accounts')}>🌐 Page Accounts</button>
+              <button type="button" onClick={() => goToSection('posts')}>📝 Posts</button>
+              <button type="button" onClick={() => goToSection('invitations')}>✉ Send Invitations</button>
+              <button type="button" onClick={() => goToSection('reports')}>🚩 Reports</button>
+              <button type="button" onClick={() => goToSection('feedback')}>⭐ View Feedback</button>
+            </section>
+
+            <section className="admin-insights" aria-label="Dashboard summary">
+              <div className="admin-insights-heading">
+                <div>
+                  <p className="admin-eyebrow">AT A GLANCE</p>
+                  <h2>Community overview</h2>
+                  <p>Key activity counts across the platform, updated with this dashboard.</p>
+                </div>
+                <div className="admin-insights-total">
+                  <strong>{users.length + pages.length + postsList.length}</strong>
+                  <span>managed items</span>
+                </div>
+              </div>
+
+              <div className="admin-summary-strip">
+                <div><span>Needs attention</span><strong>{reportRows.filter((report) => report.status !== 'Resolved').length} reports</strong></div>
+                <div><span>Published content</span><strong>{postsList.length} posts</strong></div>
+                <div><span>Verified pages</span><strong>{pages.filter((page) => page.verified).length} pages</strong></div>
+                <div><span>Feedback</span><strong>{feedbackRows.length} reviews</strong></div>
+              </div>
+
+              <div className="admin-chart-grid">
+                <div className="admin-chart-card">
+                  <div className="admin-chart-heading"><div><h3>Content mix</h3><p>Current records by category</p></div><span>COUNT</span></div>
+                  <div className="admin-histogram" role="img" aria-label="Histogram comparing users, pages, posts, and reports">
+                    {dashboardMetrics.map((metric) => (
+                      <div className="admin-bar-column" key={metric.label}>
+                        <strong>{metric.value}</strong>
+                        <div className="admin-bar-track"><span className={`admin-bar ${metric.color}`} style={{ height: `${Math.max(8, (metric.value / dashboardChartMax) * 100)}%` }} /></div>
+                        <small>{metric.label}</small>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="admin-chart-card">
+                  <div className="admin-chart-heading"><div><h3>Activity signal</h3><p>Relative volume across tracked areas</p></div><span>LIVE DATA</span></div>
+                  <div className="admin-line-chart" role="img" aria-label="Line graph showing relative dashboard activity">
+                    <div className="admin-chart-grid-lines"><span /><span /><span /><span /></div>
+                    <svg viewBox="0 0 300 150" preserveAspectRatio="none" aria-hidden="true">
+                      <polyline points={dashboardChartPoints} fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+                      {dashboardMetrics.map((metric, index) => <circle key={metric.label} cx={34 + index * 84} cy={128 - (metric.value / dashboardChartMax) * 92} r="5" />)}
+                    </svg>
+                    <div className="admin-line-labels">{dashboardMetrics.map((metric) => <small key={metric.label}>{metric.label}</small>)}</div>
+                  </div>
+                </div>
               </div>
             </section>
 
@@ -982,11 +1549,31 @@ export default function Admin() {
                 </button>
               </li>
             ))}
+            <li className="admin-sidebar-logout">
+              <button type="button" className="admin-nav-item" onClick={logout}>↪ Log out</button>
+            </li>
           </ul>
         </nav>
       </aside>
 
       <main className="admin-main">
+        <nav className="admin-mobile-nav" aria-label="Admin sections">
+          <span className="admin-mobile-nav-label">Admin menu</span>
+          <div className="admin-mobile-nav-list">
+            {sidebarItems.map((item) => (
+              <button
+                type="button"
+                key={item.key}
+                className={`admin-mobile-nav-item ${activeSection === item.key ? 'active' : ''}`}
+                onClick={() => goToSection(item.key)}
+              >
+                {item.label}
+              </button>
+            ))}
+            <button type="button" className="admin-mobile-nav-item admin-mobile-logout" onClick={logout}>↪ Log out</button>
+          </div>
+        </nav>
+
         <div className="admin-header">
           <div>
             <h1>Dashboard Overview</h1>
@@ -997,12 +1584,6 @@ export default function Admin() {
             <img src="https://i.pravatar.cc/150?img=8" alt="admin" />
             <span>{user?.username || user?.email}</span>
           </div>
-        </div>
-
-        <div className="admin-actions">
-          <button className="admin-logout" type="button" onClick={logout}>
-            Log out
-          </button>
         </div>
 
         <div className="admin-page-shell">
@@ -1052,6 +1633,7 @@ export default function Admin() {
                     className="form-submit"
                     disabled={resettingPassword}
                   >
+                    {resettingPassword && <span className="button-spinner" aria-hidden="true" />}
                     {resettingPassword ? 'Resetting...' : 'Reset Password'}
                   </button>
                   <button
@@ -1077,7 +1659,7 @@ export default function Admin() {
               <span className={`admin-confirm-icon ${userConfirmation.type}`}>{userConfirmation.type === 'delete' ? '!' : '✓'}</span>
               <p className="admin-eyebrow">CONFIRM ACTION</p>
               <h3 id="admin-confirm-title">{userConfirmation.type === 'delete' ? 'Delete this account?' : userConfirmation.type === 'suspend' ? 'Suspend this account?' : 'Restore this account?'}</h3>
-              <p>{userConfirmation.type === 'delete' ? `This permanently removes ${userConfirmation.user.fullName || userConfirmation.user.username}'s account and cannot be undone.` : userConfirmation.type === 'suspend' ? `${userConfirmation.user.fullName || userConfirmation.user.username} will no longer be able to sign in until the account is restored.` : `${userConfirmation.user.fullName || userConfirmation.user.username} will be able to sign in again.`}</p>
+              <p>{userConfirmation.type === 'delete' ? `This permanently removes ${userConfirmation.user.fullName || userConfirmation.user.username || userConfirmation.user.pageName || 'this account'}'s account and cannot be undone.` : userConfirmation.type === 'suspend' ? `${userConfirmation.user.fullName || userConfirmation.user.username} will no longer be able to sign in until the account is restored.` : `${userConfirmation.user.fullName || userConfirmation.user.username} will be able to sign in again.`}</p>
               <div className="admin-confirm-actions">
                 <button type="button" className="form-cancel" onClick={() => setUserConfirmation(null)}>Cancel</button>
                 <button type="button" className={userConfirmation.type === 'delete' ? 'admin-delete-btn' : userConfirmation.type === 'suspend' ? 'admin-suspend-btn' : 'form-submit'} onClick={confirmUserAction}>{userConfirmation.type === 'delete' ? 'Delete account' : userConfirmation.type === 'suspend' ? 'Suspend account' : 'Restore account'}</button>

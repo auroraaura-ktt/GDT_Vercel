@@ -54,6 +54,20 @@ Alternative (if you don't use a full `MONGODB_URI`):
 
 ## 3. Deploy
 
+### Choose a nearby Vercel region
+
+Set the Vercel project region close to your users and your databases. Vercel
+cannot make a request fast when the container, MongoDB Atlas cluster, and Neo4j
+instance are on distant continents. A VPN changing the response time is a
+strong sign of ISP routing or geographic distance, not something the React
+bundle can fix. Check `/api/health` and a normal authenticated API request from
+both networks to identify which path is slow.
+
+Keep `MONGODB_URI`, `NEO4J_URI`, `NEO4J_USER`, and `NEO4J_PASSWORD` configured
+in Vercel. The application no longer contains fallback Neo4j credentials, and
+the server will skip optional Neo4j startup work when those variables are not
+present instead of waiting on an unknown remote database.
+
 ### Option A — GitHub (recommended)
 1. Commit and push (see **Security note** below), then in Vercel:
    **Add New → Project → Import** your repo.

@@ -1,6 +1,7 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 import { apiRequest } from "../lib/api";
+import { VERIFIED_AUTHORS_UPDATED_EVENT } from "../lib/useVerifiedAuthors";
 
 export const AuthContext = createContext(null);
 
@@ -70,6 +71,35 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     loadCurrentUser();
   }, [auth?.token]);
+
+  // When an admin changes a user's blue mark, the shared verified-accounts
+  // cache is invalidated (same tab event + cross-tab localStorage signal).
+  // Re-fetch the signed-in profile so `user.verified` always reflects the
+  // author's CURRENT account state, keeping the badge on the user's own posts
+  // in sync immediately (no manual browser refresh).
+  const loadCurrentUserRef = useRef(loadCurrentUser);
+  loadCurrentUserRef.current = loadCurrentUser;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return undefined;
+
+    const refreshProfile = () => {
+      loadCurrentUserRef.current();
+    };
+
+    const handleStorageUpdate = (event) => {
+      if (!event || event.key === VERIFIED_AUTHORS_UPDATED_EVENT || event.key === null) {
+        refreshProfile();
+      }
+    };
+
+    window.addEventListener(VERIFIED_AUTHORS_UPDATED_EVENT, refreshProfile);
+    window.addEventListener("storage", handleStorageUpdate);
+    return () => {
+      window.removeEventListener(VERIFIED_AUTHORS_UPDATED_EVENT, refreshProfile);
+      window.removeEventListener("storage", handleStorageUpdate);
+    };
+  }, []);
 
   const login = async (payload) => {
     const data = await apiRequest("/auth/login", {

@@ -4,7 +4,7 @@ import app from './app.js';
 import { closeNeo4j } from './config/neo4j.js';
 import { connectMongoDB, disconnectMongoDB } from './config/mongodb.js';
 import { ensureUserConstraints } from './config/neo4jInit.js';
-import { env } from './config/env.js';
+import { env, hasNeo4jConfig } from './config/env.js';
 import { verifyEmailConnection } from './utils/emailService.js';
 import { flushPendingNeo4jWrites } from './utils/userPersistence.js';
 
@@ -72,9 +72,13 @@ async function start() {
     clearInterval(neo4jRetryTimer);
   }
 
-  neo4jRetryTimer = setInterval(() => {
-    retryQueuedNeo4jWrites();
-  }, 15000);
+  // Vercel containers are request-driven. A permanent timer keeps a scaled-down
+  // instance alive and creates repeated remote connection attempts.
+  if (!process.env.VERCEL && hasNeo4jConfig) {
+    neo4jRetryTimer = setInterval(() => {
+      retryQueuedNeo4jWrites();
+    }, 15000);
+  }
 
   process.on('SIGINT', shutdown);
   process.on('SIGTERM', shutdown);
@@ -102,10 +106,10 @@ async function runStartupTasks() {
   }
 
   try {
-    if (!env.skipDb) {
+    if (!env.skipDb && hasNeo4jConfig) {
       await ensureUserConstraints();
     } else {
-      console.log('SKIP_DB=true — skipping Neo4j initialization');
+      console.log('Neo4j is not configured or SKIP_DB=true — skipping initialization');
     }
   } catch (error) {
     console.warn('⚠ Neo4j initialization failed; continuing with MongoDB-only mode:', error.message);

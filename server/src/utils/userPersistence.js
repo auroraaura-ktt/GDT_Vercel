@@ -148,6 +148,65 @@ export async function deleteUserFromMongo(userId) {
   return UserModel.findOneAndDelete({ id: userId })
 }
 
+export async function setUserVerifiedInMongo(userId, verified) {
+  const updated = await UserModel.findOneAndUpdate(
+    { id: userId },
+    { $set: { verified: Boolean(verified) } },
+    { new: true }
+  ).lean()
+  return updated
+}
+
+// Resolve the set of account ids that currently carry the blue mark. This is
+// derived from the account records at read time (never stored on posts) so the
+// feed can show verification for past, current, and future posts of an account.
+// Both databases are checked and merged, because an account may live in either.
+export async function listVerifiedUserIds() {
+  const verified = new Set()
+
+  try {
+    const users = await UserModel.find({ verified: true }).select({ id: 1 }).lean()
+    for (const user of users || []) {
+      if (user?.id !== undefined && user?.id !== null) {
+        verified.add(String(user.id))
+      }
+    }
+  } catch (error) {
+    if (!isNeo4jUnavailableError(error)) {
+      console.warn('MongoDB verified-accounts lookup failed:', error.message)
+    }
+  }
+
+  const session = driver.session()
+  try {
+    const result = await session.executeRead((tx) =>
+      tx.run(
+        `
+          MATCH (user:User)
+          WHERE user.verified = true
+             OR user.verified = 'true'
+             OR toString(user.verified) = 'true'
+          RETURN user.id AS id
+        `
+      )
+    )
+    for (const record of result.records) {
+      const id = record.get('id')
+      if (id !== null && id !== undefined) {
+        verified.add(String(id))
+      }
+    }
+  } catch (error) {
+    if (!isNeo4jUnavailableError(error)) {
+      console.warn('Neo4j verified-accounts lookup failed:', error.message)
+    }
+  } finally {
+    await session.close()
+  }
+
+  return verified
+}
+
 export async function setUserSuspensionInMongo(userId, suspended) {
   return UserModel.findOneAndUpdate(
     { id: userId },

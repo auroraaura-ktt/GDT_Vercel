@@ -1,17 +1,14 @@
-import { Link } from 'react-router-dom'
-import { FaHome, FaCompass, FaCalendarAlt, FaUsers, FaComments } from 'react-icons/fa'
+import { Link, useNavigate } from 'react-router-dom'
+import { FaHome, FaCommentDots, FaSignOutAlt } from 'react-icons/fa'
 import { useAuth } from '../context/useAuth'
 
 const navItems = [
   { label: 'Home', icon: FaHome, to: '/' },
-  { label: 'Explore', icon: FaCompass, to: '/feed' },
-  { label: 'Events', icon: FaCalendarAlt, to: '/feed' },
-  { label: 'Community', icon: FaUsers, to: '/feed' },
-  { label: 'Messages', icon: FaComments, to: '/feed' },
 ]
 
 export default function LeftSidebar({ sidebarOpen, setSidebarOpen }) {
-  const { user } = useAuth()
+  const { user, logout } = useAuth()
+  const navigate = useNavigate()
 
   const initials = user?.username
     ? user.username
@@ -19,6 +16,11 @@ export default function LeftSidebar({ sidebarOpen, setSidebarOpen }) {
         .map((part) => part[0]?.toUpperCase())
         .join('')
     : 'U'
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
 
   return (
     <aside className={`left-sidebar ${sidebarOpen ? 'active' : ''}`}>
@@ -36,7 +38,7 @@ export default function LeftSidebar({ sidebarOpen, setSidebarOpen }) {
         </div>
       </div>
 
-      <ul className="sidebar-menu">
+      <ul className="sidebar-menu sidebar-menu-main">
         {navItems.map(({ label, icon: Icon, to }) => (
           <li key={label}>
             <Link to={to}>
@@ -47,7 +49,21 @@ export default function LeftSidebar({ sidebarOpen, setSidebarOpen }) {
         ))}
       </ul>
 
-      <div className="sidebar-divider" />
+      <ul className="sidebar-menu sidebar-menu-bottom">
+        <li>
+          <Link to="/feedback">
+            <FaCommentDots />
+            <span>Feedback</span>
+          </Link>
+        </li>
+
+        <li>
+          <button type="button" className="sidebar-action-btn" onClick={handleLogout}>
+            <FaSignOutAlt />
+            <span>Logout</span>
+          </button>
+        </li>
+      </ul>
     </aside>
   )
 }

@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import { FaMoon, FaSync } from "react-icons/fa";
 import { useAuth } from "../context/useAuth";
+import VerifiedBadge from "./VerifiedBadge";
 
 export default function RightSidebar({ darkMode, setDarkMode, onRefresh }) {
   const { user } = useAuth();
@@ -17,7 +18,7 @@ export default function RightSidebar({ darkMode, setDarkMode, onRefresh }) {
     <aside className="right-sidebar">
       <div className="profile-card">
         <div className="profile-avatar-large">{initials}</div>
-        <h3>{user?.username || "MiitVerse User"}</h3>
+        <h3>{user?.username || "MiitVerse User"} {user?.verified && <VerifiedBadge size="small" />}</h3>
         <p>{user?.email || "Guest member"}</p>
         {user ? (
           <Link className="profile-btn" to="/profile">View Profile</Link>

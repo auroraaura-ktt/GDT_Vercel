@@ -16,22 +16,25 @@ function getStoredAuthToken() {
   }
 }
 
-export async function apiRequest(path, options = {}) {
+export function resolveApiUrl(path) {
   const baseUrl = import.meta.env.VITE_API_BASE_URL || '/api'
+
+  if (/^https?:\/\//i.test(path)) {
+    return path
+  }
+
+  const trimmedBase = baseUrl.replace(/\/+$/g, '')
+  const trimmedPath = path.replace(/^\/+/, '')
+
+  return `${trimmedBase}/${trimmedPath}`
+}
+
+export async function apiRequest(path, options = {}) {
   const timeoutMs = options.timeout ?? 15000
   const { timeout, signal, headers: requestHeaders, ...fetchOptions } = options
   const authToken = getStoredAuthToken()
 
-  const url = (() => {
-    if (/^https?:\/\//i.test(path)) {
-      return path
-    }
-
-    const trimmedBase = baseUrl.replace(/\/+$/g, '')
-    const trimmedPath = path.replace(/^\/+/, '')
-
-    return `${trimmedBase}/${trimmedPath}`
-  })()
+  const url = resolveApiUrl(path)
 
   const controller = new AbortController()
   const abortSignal = signal || controller.signal

@@ -1,13 +1,15 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { FaArrowLeft, FaBullhorn, FaChartLine, FaImage, FaPen } from 'react-icons/fa'
 
 import { useAuth } from '../context/useAuth'
-import { apiRequest } from '../lib/api'
+import { apiRequest, resolveApiUrl } from '../lib/api'
 import { buildPagePost, normalizePagePosts } from '../lib/pagePosts'
+import LoadingState from '../components/LoadingState'
 import './PageDashboard.css'
 
 export default function PageDashboard() {
+  const navigate = useNavigate()
   const { slug } = useParams()
   const { token, user } = useAuth()
   const [page, setPage] = useState(null)
@@ -88,6 +90,11 @@ export default function PageDashboard() {
       if (imageFile) {
         formData.append('image', imageFile)
       }
+      // Admins publish on behalf of this page so the post is attributed to the
+      // page account (its full page name), never to the admin.
+      if (user?.role === 'admin') {
+        formData.append('onBehalfOfPageId', page.id)
+      }
 
       const data = await apiRequest('/social/posts', {
         method: 'POST',
@@ -139,7 +146,7 @@ export default function PageDashboard() {
               <label className="page-image-picker" htmlFor="pageImage"><FaImage /> Add image</label>
               <input id="pageImage" type="file" accept="image/*" onChange={handleImageChange} />
               <span>{draft.trim().length} characters</span>
-              <button type="submit" disabled={posting}>{posting ? 'Publishing…' : <><FaBullhorn /> Publish update</>}</button>
+              <button type="submit" disabled={posting}>{posting ? <><span className="button-spinner" aria-hidden="true" /> Publishing…</> : <><FaBullhorn /> Publish update</>}</button>
             </div>
             {imageError && <p className="page-message error">{imageError}</p>}
             {message && <p className={`page-message ${message === 'Your page update is live.' ? 'success' : 'error'}`}>{message}</p>}
@@ -153,7 +160,7 @@ export default function PageDashboard() {
       return (
         <section className="page-posts-card" id="recent-posts">
           <div className="page-card-heading"><div><p className="page-kicker">ACTIVITY</p><h2>Recent page posts</h2></div><span className="page-post-count">{posts.length} total</span></div>
-          {posts.length === 0 ? <div className="page-empty-state"><FaBullhorn /><h3>Your page has no posts yet</h3><p>Create the first update to start your page activity.</p><button type="button" className="page-empty-action" onClick={() => setActiveTab('create-post')}>Create an update</button></div> : <div className="page-post-list">{posts.map((post) => <article className="page-post" key={post.id}><span className="page-avatar small">{pageInitial}</span><div><strong>{pageTitle}</strong><time>{new Date(post.createdAt).toLocaleString()}</time><p>{post.content}</p>{post.image && <img src={post.image} alt="Post attachment" />}</div></article>)}</div>}
+          {posts.length === 0 ? <div className="page-empty-state"><FaBullhorn /><h3>Your page has no posts yet</h3><p>Create the first update to start your page activity.</p><button type="button" className="page-empty-action" onClick={() => setActiveTab('create-post')}>Create an update</button></div> : <div className="page-post-list">{posts.map((post) => <article className="page-post" key={post.id}><span className="page-avatar small">{pageInitial}</span><div><strong>{pageTitle}</strong><time>{new Date(post.createdAt).toLocaleString()}</time><p>{post.content}</p>{post.image && <img src={resolveApiUrl(post.image.replace(/^\/api(?=\/)/, ''))} alt="Post attachment" />}</div></article>)}</div>}
         </section>
       )
     }
@@ -178,7 +185,7 @@ export default function PageDashboard() {
   }
 
   if (loading) {
-    return <main className="page-dashboard-state">Loading your page dashboard…</main>
+    return <main className="page-dashboard-state"><LoadingState label="Loading your page dashboard" /></main>
   }
 
   if (error || !page) {
@@ -209,7 +216,20 @@ export default function PageDashboard() {
           <button type="button" className={activeTab === 'published-posts' ? 'active' : ''} onClick={() => setActiveTab('published-posts')}><FaBullhorn /> Published posts</button>
         </nav>
 
-        <Link className="page-back-link" to="/feed"><FaArrowLeft /> Back to feed</Link>
+        <button
+          type="button"
+          className="page-back-link"
+          onClick={() => {
+            if (window.history.length > 1) {
+              navigate(-1)
+              return
+            }
+
+            navigate('/feed')
+          }}
+        >
+          <FaArrowLeft /> Back
+        </button>
       </aside>
 
       <section className="page-dashboard-main">

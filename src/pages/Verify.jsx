@@ -51,18 +51,27 @@ export default function Verify() {
   const location = useLocation()
   const storedPending = useMemo(() => readPendingVerification(), [])
   const stateEmail = location.state?.email || ''
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate('/register')
+  }
   const initialEmail = stateEmail || storedPending?.email || ''
   const initialResendAvailableAt = location.state?.resendAvailableAt || storedPending?.resendAvailableAt
   const initialVerificationExpiresAt = location.state?.verificationExpiresAt || storedPending?.verificationExpiresAt
   const initialResendDeadlineMs = getDeadlineMs(initialResendAvailableAt) || (initialEmail ? Date.now() + RESEND_COOLDOWN_MS : 0)
 
   const [email, setEmail] = useState(initialEmail)
+  const [resendDeadlineMs, setResendDeadlineMs] = useState(initialResendDeadlineMs)
+  const [remainingMs, setRemainingMs] = useState(() => Math.max(initialResendDeadlineMs - Date.now(), 0))
   const [codeDigits, setCodeDigits] = useState(Array(8).fill(''))
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [info, setInfo] = useState('')
-  const [resendDeadlineMs, setResendDeadlineMs] = useState(initialResendDeadlineMs)
-  const [remainingMs, setRemainingMs] = useState(() => Math.max(initialResendDeadlineMs - Date.now(), 0))
   const [resendLoading, setResendLoading] = useState(false)
   const inputRefs = useRef([])
 
@@ -240,6 +249,9 @@ export default function Verify() {
 
       <div className="form-section">
         <div className="auth-container">
+          <button type="button" className="auth-back-btn" onClick={handleBack}>
+            ← Back
+          </button>
           <h2>Verify email</h2>
           <p style={{ textAlign: 'center', color: '#8892b0', marginBottom: '24px' }}>
             Enter the 8-digit code sent to your email.
@@ -285,6 +297,7 @@ export default function Verify() {
             {info && <p style={{ color: '#64ffda', fontSize: '14px', marginBottom: '16px', textAlign: 'center' }}>{info}</p>}
 
             <button type="submit" className="auth-btn" disabled={loading || !isCodeComplete}>
+              {loading && <span className="button-spinner" aria-hidden="true" />}
               {loading ? 'Verifying...' : 'Verify & Create Account'}
             </button>
           </form>
@@ -301,6 +314,7 @@ export default function Verify() {
               className="auth-btn"
               style={{ marginTop: '16px', background: 'rgba(100, 255, 218, 0.2)', color: '#64ffda', border: '1px solid #64ffda' }}
             >
+              {resendLoading && <span className="button-spinner" aria-hidden="true" />}
               {resendLoading ? 'Resending...' : 'Resend verification email'}
             </button>
           )}

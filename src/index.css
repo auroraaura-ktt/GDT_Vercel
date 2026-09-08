@@ -4,3 +4,90 @@
   box-sizing: border-box;
   font-family: Arial, sans-serif;
 }
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body,
+#root {
+  width: 100%;
+  min-width: 0;
+}
+
+html,
+body {
+  overflow-x: hidden;
+}
+
+img,
+video,
+svg {
+  max-width: 100%;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.loading-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 120px;
+  color: #667085;
+  font-weight: 700;
+}
+
+.loading-state-compact {
+  min-height: 64px;
+  justify-content: flex-start;
+  font-size: 0.9rem;
+}
+
+.loading-spinner,
+.button-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: loading-spin 0.75s linear infinite;
+}
+
+.button-spinner {
+  width: 14px;
+  height: 14px;
+  flex-basis: 14px;
+  border-width: 2px;
+}
+
+.loading-skeleton {
+  min-height: 84px;
+  border-radius: 14px;
+  background: linear-gradient(90deg, rgba(220, 228, 241, 0.55) 25%, rgba(245, 248, 252, 0.95) 50%, rgba(220, 228, 241, 0.55) 75%);
+  background-size: 200% 100%;
+  animation: loading-shimmer 1.4s ease-in-out infinite;
+}
+
+@keyframes loading-spin {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes loading-shimmer {
+  to { background-position: -200% 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-spinner,
+  .button-spinner,
+  .loading-skeleton {
+    animation: none;
+  }
+}

@@ -8,10 +8,20 @@ export default function Register() {
   const navigate = useNavigate()
   const location = useLocation()
   const { register } = useAuth()
-  const [form, setForm] = useState({ username: '', email: '', password: '' })
+  const initialEmailFromQuery = new URLSearchParams(location.search).get('email') ?? ''
+  const [form, setForm] = useState({ username: '', email: initialEmailFromQuery, password: '' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [emailValidationMessage, setEmailValidationMessage] = useState('')
+
+  const handleBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1)
+      return
+    }
+
+    navigate('/')
+  }
   const [passwordValidation, setPasswordValidation] = useState({
     isLengthValid: false,
     hasUpperCase: false,
@@ -25,7 +35,7 @@ export default function Register() {
     const hasUpperCase = /[A-Z]/.test(pwd)
     const hasLowerCase = /[a-z]/.test(pwd)
     const hasNumber = /[0-9]/.test(pwd)
-    const hasSpecialChar = /[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(pwd)
+    const hasSpecialChar = /[^A-Za-z0-9]/.test(pwd)
     const isLengthValid = pwd.length >= 8
     return {
       hasUpperCase,
@@ -48,14 +58,6 @@ export default function Register() {
       ? ''
       : 'Only @miit.edu.mm email addresses are allowed for registration.'
   }
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search)
-    const inviteEmail = params.get('email')
-    if (inviteEmail) {
-      setForm((prev) => ({ ...prev, email: inviteEmail }))
-    }
-  }, [location.search])
 
   async function handleSubmit(event) {
     event.preventDefault()
@@ -110,6 +112,9 @@ export default function Register() {
 
       <div className="form-section">
         <div className="auth-container" style={{ maxWidth: '480px' }}>
+          <button type="button" className="auth-back-btn" onClick={handleBack}>
+            ← Back
+          </button>
           <h2>Create account</h2>
           <p style={{ textAlign: 'center', color: '#8892b0', marginBottom: '24px' }}>
             Join MiitVerse as a user account.
@@ -191,6 +196,7 @@ export default function Register() {
             {error && <p style={{ color: '#ff6b6b', fontSize: '14px', marginBottom: '16px', textAlign: 'center' }}>{error}</p>}
 
             <button type="submit" className="auth-btn" disabled={loading || !passwordValidation.isValid}>
+              {loading && <span className="button-spinner" aria-hidden="true" />}
               {loading ? 'Creating account...' : 'Register'}
             </button>
           </form>

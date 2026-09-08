@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+
+import { persistSocialPost, deleteSocialPostFromMongo } from './socialPersistence.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const dataDir = resolve(__dirname, '..', '..', 'data');
@@ -75,30 +78,20 @@ export function shuffleUserPostsByReactions(posts = [], random = Math.random) {
     .map((entry) => entry.post);
 }
 
-function sortPagePostsByLatest(posts = []) {
+function sortPostsByLatest(posts = []) {
   return [...(posts || [])].sort((left, right) => {
-    return new Date(right.createdAt || 0) - new Date(left.createdAt || 0);
+    const rightTime = Date.parse(right.createdAt || '');
+    const leftTime = Date.parse(left.createdAt || '');
+    if (Number.isNaN(rightTime) && Number.isNaN(leftTime)) return 0;
+    if (Number.isNaN(rightTime)) return 1;
+    if (Number.isNaN(leftTime)) return -1;
+    if (rightTime !== leftTime) return rightTime - leftTime;
+    return String(right.id || '').localeCompare(String(left.id || ''));
   });
 }
 
 export function applyUserPostWeightedShuffle(posts = [], options = {}) {
-  const pagePostUserIds = options.pagePostUserIds || options.pageUserIds || [];
-  const random = options.random || Math.random;
-  const pagePosts = [];
-  const userPosts = [];
-
-  for (const post of posts || []) {
-    if (isPagePost(post, pagePostUserIds)) pagePosts.push(post);
-    else userPosts.push(post);
-  }
-
-  const shuffledUserPosts = shuffleUserPostsByReactions(userPosts, random);
-  const orderedPagePosts = sortPagePostsByLatest(pagePosts).map((post) => ({
-    ...post,
-    source: post.source || 'page',
-  }));
-
-  return [...orderedPagePosts, ...shuffledUserPosts];
+  return sortPostsByLatest(posts);
 }
 
 export function toggleFollowRelationship(currentFollowing = [], targetUser = null) {
@@ -121,6 +114,27 @@ export function listSocialPosts(currentUserId = null, following = [], options = 
   return applyUserPostWeightedShuffle(getVisiblePosts(posts, currentUserId, following), options);
 }
 
+export function listSocialPostsPage(currentUserId = null, following = [], options = {}) {
+  const limit = Math.min(50, Math.max(1, Number(options.limit) || 8));
+  const cursor = options.cursor || null;
+  const visiblePosts = applyUserPostWeightedShuffle(getVisiblePosts(readJson(postsFile, []), currentUserId, following));
+  const startIndex = cursor
+    ? visiblePosts.findIndex((post) => String(post.id) === String(cursor.id)) + 1
+    : 0;
+  const safeStartIndex = startIndex > 0 ? startIndex : 0;
+  const posts = visiblePosts.slice(safeStartIndex, safeStartIndex + limit);
+  const hasMore = safeStartIndex + posts.length < visiblePosts.length;
+  const lastPost = posts.at(-1);
+
+  return {
+    posts,
+    hasMore,
+    nextCursor: hasMore && lastPost
+      ? { id: lastPost.id, createdAt: lastPost.createdAt }
+      : null,
+  };
+}
+
 export function listAllSocialPosts() {
   return readJson(postsFile, []);
 }
@@ -128,7 +142,7 @@ export function listAllSocialPosts() {
 export function listSocialPostsByUserId(userId) {
   if (!userId) return [];
   const posts = readJson(postsFile, []);
-  return sortPagePostsByLatest(
+  return sortPostsByLatest(
     (posts || []).filter((p) => p && (p.userId === userId || p.userId === String(userId)))
   );
 }
@@ -138,6 +152,9 @@ export function deleteSocialPostById(postId) {
   const posts = readJson(postsFile, []);
   const updated = (posts || []).filter((p) => p && String(p.id) !== String(postId));
   writeJson(postsFile, updated);
+  void deleteSocialPostFromMongo(postId).catch((error) => {
+    console.warn('MongoDB post delete failed:', error.message);
+  });
   return true;
 }
 
@@ -152,6 +169,11 @@ export function updateSocialPostById(postId, patch = {}) {
     return next;
   });
   writeJson(postsFile, updated);
+  if (changed) {
+    void persistSocialPost(changed).catch((error) => {
+      console.warn('MongoDB post update failed:', error.message);
+    });
+  }
   return changed;
 }
 
@@ -167,9 +189,14 @@ export function createSocialPost(post) {
   }
 
   const nextPost = {
-    id: post.id || `post-${Date.now()}`,
+    id: post.id || `post-${randomUUID()}`,
     userId: post.userId || 'guest',
     username: post.username || 'MiitVerse member',
+    source: post.source || 'user',
+    postType: post.postType || (post.source === 'page' ? 'page' : 'user'),
+    authorType: post.authorType || (post.source === 'page' ? 'page' : 'user'),
+    pageName: post.pageName || null,
+    profilePicture: post.profilePicture || null,
     content: post.content || '',
     image: post.image || imagePath || null,
     createdAt: post.createdAt || new Date().toISOString(),
@@ -177,6 +204,7 @@ export function createSocialPost(post) {
     likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],
     comments: Array.isArray(post.comments) ? post.comments : [],
     reposts: Number(post.reposts || 0),
+    shares: Number(post.shares ?? post.reposts ?? 0),
     visibility: post.visibility || 'public',
   };
 
@@ -193,25 +221,74 @@ export function toggleSocialPostLike(postId, account) {
   const updated = posts.map((post) => {
     if (!post || String(post.id) !== String(postId)) return post
 
-    const likedBy = Array.isArray(post.likedBy) ? post.likedBy : []
-    const existingIndex = likedBy.findIndex((entry) => String(entry?.userId) === String(account.id))
-    const nextLikedBy = existingIndex >= 0
-      ? likedBy.filter((_, index) => index !== existingIndex)
-      : [...likedBy, { userId: String(account.id), username: account.username || 'MiitVerse member' }]
-    const legacyLikes = Math.max(Number(post.likes || 0), likedBy.length)
-    const nextPost = {
-      ...post,
-      likedBy: nextLikedBy,
-      likes: existingIndex >= 0 ? Math.max(0, legacyLikes - 1) : legacyLikes + 1,
-    }
-
-    result = { post: nextPost, reacted: existingIndex < 0 }
-    return nextPost
+    result = togglePostLikeOnPost(post, account)
+    return result.post
   })
 
   if (!result) return null
   writeJson(postsFile, updated)
+  void persistSocialPost(result.post).catch((error) => {
+    console.warn('MongoDB like sync failed:', error.message)
+  })
   return result
+}
+
+export function togglePostLikeOnPost(post, account) {
+  if (!post || !account?.id) return null
+
+  const likedBy = Array.isArray(post.likedBy) ? post.likedBy : []
+  const existingIndex = likedBy.findIndex((entry) => String(entry?.userId) === String(account.id))
+  const nextLikedBy = existingIndex >= 0
+    ? likedBy.filter((_, index) => index !== existingIndex)
+    : [...likedBy, { userId: String(account.id), username: account.username || 'MiitVerse member' }]
+  const legacyLikes = Math.max(Number(post.likes || 0), likedBy.length)
+  const nextPost = {
+    ...post,
+    likedBy: nextLikedBy,
+    likes: existingIndex >= 0 ? Math.max(0, legacyLikes - 1) : legacyLikes + 1,
+  }
+
+  return { post: nextPost, reacted: existingIndex < 0 }
+}
+
+export function addSocialPostComment(postId, comment) {
+  if (!postId || !comment?.userId || !String(comment.content || '').trim()) return null
+
+  const posts = readJson(postsFile, [])
+  let updatedPost = null
+  const updated = posts.map((post) => {
+    if (!post || String(post.id) !== String(postId)) return post
+
+    const added = addCommentToPost(post, comment)
+    if (!added) return post
+    updatedPost = added.post
+    return updatedPost
+  })
+
+  if (!updatedPost) return null
+  writeJson(postsFile, updated)
+  void persistSocialPost(updatedPost).catch((error) => {
+    console.warn('MongoDB comment sync failed:', error.message)
+  })
+  return { post: updatedPost, comment: updatedPost.comments.at(-1) }
+}
+
+export function addCommentToPost(post, comment) {
+  if (!post || !comment?.userId || !String(comment.content || '').trim()) return null
+
+  const nextComment = {
+    id: comment.id || `comment-${Date.now()}`,
+    userId: String(comment.userId),
+    username: comment.username || 'MiitVerse member',
+    content: String(comment.content).trim().slice(0, 500),
+    createdAt: comment.createdAt || new Date().toISOString(),
+  }
+  const updatedPost = {
+    ...post,
+    comments: [...(Array.isArray(post.comments) ? post.comments : []), nextComment],
+  }
+
+  return { post: updatedPost, comment: nextComment }
 }
 
 export function getSocialFollows(userId) {

@@ -1,5 +1,6 @@
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'node:crypto'
+import { fileURLToPath } from 'node:url'
 
 import { connectMongoDB } from '../config/mongodb.js'
 import { persistUserToBothDatabases } from '../utils/userPersistence.js'
@@ -11,17 +12,17 @@ const adminAccounts = [
   { email: 'minn_khant@miitverse.com', username: 'MiitVerse_mk' },
 ]
 
-const defaultPassword = process.env.ADMIN_SEED_PASSWORD || 'Admin123456'
+export const defaultPassword = 'Admin123456'
 
-function buildPassword(username) {
-  return process.env.ADMIN_SEED_PASSWORD || username
+export function buildPassword(account) {
+  return (account?.username || '').trim() || process.env.ADMIN_SEED_PASSWORD || defaultPassword
 }
 
 async function main() {
   await connectMongoDB()
 
   for (const account of adminAccounts) {
-    const passwordHash = await bcrypt.hash(buildPassword(account.username), 10)
+    const passwordHash = await bcrypt.hash(buildPassword(account), 10)
     const userData = {
       id: randomUUID(),
       username: account.username,
@@ -37,7 +38,11 @@ async function main() {
   }
 }
 
-main().catch((error) => {
-  console.error('Failed to seed admin users:', error.message)
-  process.exit(1)
-})
+const isDirectScriptExecution = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]
+
+if (isDirectScriptExecution) {
+  main().catch((error) => {
+    console.error('Failed to seed admin users:', error.message)
+    process.exit(1)
+  })
+}

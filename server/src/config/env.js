@@ -66,20 +66,28 @@ function buildMongoUri() {
 
 export const env = {
   port: Number(process.env.PORT || 3001),
-  clientOrigin: process.env.CLIENT_ORIGIN || 'https://miitverse.onrender.com',
+  clientOrigin: normalizeEnvValue(process.env.CLIENT_ORIGIN || 'https://miitverse-xi.vercel.app'),
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-me',
   // SendGrid API key for email service
   sendgridApiKey: process.env.SENDGRID_API_KEY || '',
-  sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL || 'noreply@miitverse.com',
-  sendgridFromName: process.env.SENDGRID_FROM_NAME || 'MiitVerse Authentication',
+  sendgridFromEmail: process.env.SENDGRID_FROM_EMAIL || 'noreply@sendgrid.net',
+  sendgridFromName: process.env.SENDGRID_FROM_NAME || 'MiitVerse',
+  emailProviderPriority: (process.env.EMAIL_PROVIDER_PRIORITY || 'sendgrid,gmail').split(',').map((entry) => entry.trim().toLowerCase()).filter(Boolean),
+  gmailSmtpHost: normalizeEnvValue(process.env.GMAIL_SMTP_HOST || 'smtp.gmail.com'),
+  gmailSmtpPort: Number(process.env.GMAIL_SMTP_PORT || 465),
+  gmailFromEmail: normalizeEnvValue(process.env.GMAIL_FROM_EMAIL || ''),
+  gmailUser: normalizeEnvValue(process.env.GMAIL_USER || ''),
+  gmailAppPassword: normalizeEnvValue(process.env.GMAIL_APP_PASSWORD || ''),
   mongodbUri: buildMongoUri(),
   mongodbHost: normalizeEnvValue(process.env.MONGODB_HOST),
   mongodbUsername: normalizeEnvValue(process.env.MONGODB_USERNAME),
   mongodbPassword: normalizeEnvValue(process.env.MONGODB_PASSWORD),
   mongodbDatabase: normalizeEnvValue(process.env.MONGODB_DATABASE || 'test'),
   mongodbProtocol: normalizeEnvValue(process.env.MONGODB_PROTOCOL || 'mongodb+srv'),
-  neo4jUri: process.env.NEO4J_URI || 'neo4j+s://1bdef416.databases.neo4j.io',
-  neo4jUser: process.env.NEO4J_USER || '1bdef416',
-  neo4jPassword: process.env.NEO4J_PASSWORD || 'FncPa8gGXHqc9gfCFIKnyxrOlyFJ1qamH82NyQf7zbc',
+  neo4jUri: normalizeEnvValue(process.env.NEO4J_URI),
+  neo4jUser: normalizeEnvValue(process.env.NEO4J_USER),
+  neo4jPassword: normalizeEnvValue(process.env.NEO4J_PASSWORD),
   skipDb: (process.env.SKIP_DB || 'false').toLowerCase() === 'true',
 }
+
+export const hasNeo4jConfig = Boolean(env.neo4jUri && env.neo4jUser && env.neo4jPassword)
