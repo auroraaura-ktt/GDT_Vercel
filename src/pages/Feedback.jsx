@@ -52,7 +52,9 @@ export default function Feedback() {
     } catch (error) {
       setStatus({
         type: 'error',
-        text: error.message || 'Something went wrong. Please try again.',
+        text: error.status === 401
+          ? 'Please log in before submitting feedback.'
+          : error.message || 'Something went wrong. Please try again.',
       })
     } finally {
       setSubmitting(false)
@@ -78,6 +80,9 @@ export default function Feedback() {
             <div>
               <h3>MiitVerse</h3>
               <p>Official Social Hub of MIIT</p>
+              {user?.username || user?.email ? (
+                <p>Submitting as {user.username || user.email}</p>
+              ) : null}
             </div>
           </div>
 

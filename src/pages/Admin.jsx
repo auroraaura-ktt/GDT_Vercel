@@ -56,6 +56,7 @@ export default function Admin() {
 
   const [feedbackRows, setFeedbackRows] = useState([])
   const [loadingFeedback, setLoadingFeedback] = useState(false)
+  const [feedbackError, setFeedbackError] = useState('')
 
   const [inviteEmails, setInviteEmails] = useState('')
   const [inviteMessage, setInviteMessage] = useState({ type: '', text: '' })
@@ -168,13 +169,14 @@ export default function Admin() {
 
   const loadFeedback = useCallback(async () => {
     setLoadingFeedback(true)
+    setFeedbackError('')
     try {
       const data = await apiRequest('/feedback', {
         headers: { Authorization: `Bearer ${token}` },
       })
-      setFeedbackRows(data.feedback || [])
+      setFeedbackRows(Array.isArray(data.feedback) ? data.feedback : [])
     } catch (err) {
-      setError(err.message || 'Failed to load feedback')
+      setFeedbackError(err.message || 'Failed to load feedback')
       setFeedbackRows([])
     } finally {
       setLoadingFeedback(false)
@@ -1173,8 +1175,10 @@ export default function Admin() {
             </div>
 
             <div className="admin-invite-link">
-              <strong>Invitation Link:</strong>
+              <strong>Invitation links:</strong>
               <a href="https://miitverse-xi.vercel.app/register" target="_blank" rel="noreferrer">https://miitverse-xi.vercel.app</a>
+              <span aria-hidden="true">·</span>
+              <a href="https://gdt-vercel.vercel.app/register" target="_blank" rel="noreferrer">https://gdt-vercel.vercel.app</a>
             </div>
 
             {inviteMessage.text && (
@@ -1358,8 +1362,9 @@ export default function Admin() {
             </div>
 
             <div className="admin-users-table-wrap admin-report-table-wrap">
+              {feedbackError && <p className="error-text">{feedbackError}</p>}
               {loadingFeedback && <LoadingState label="Loading feedback" compact />}
-              {!loadingFeedback && feedbackRows.length === 0 && <p>No user feedback has been submitted yet.</p>}
+              {!loadingFeedback && feedbackRows.length === 0 && !feedbackError && <p>No user feedback has been submitted yet.</p>}
               {!loadingFeedback && feedbackRows.length > 0 && (
               <table className="admin-users-table admin-reports-table">
                 <thead>

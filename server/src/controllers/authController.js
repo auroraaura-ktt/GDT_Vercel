@@ -11,6 +11,7 @@ import { createPageRecord, getPageRecordByOwner as getPageRecordByOwnerFromPersi
 import { persistUserToBothDatabases, getUserFromMongo, isNeo4jUnavailableError } from '../utils/userPersistence.js'
 import { buildPageAccountPayload } from '../utils/authAccountHelpers.js'
 import { pendingRegistrationStore } from '../utils/pendingRegistrations.js'
+import { getCanonicalClientOrigin } from '../utils/clientOrigins.js'
 
 const verificationTtlMs = 15 * 60 * 1000
 const verificationResendCooldownMs = 3 * 60 * 1000
@@ -59,39 +60,15 @@ function sendVerificationEmailInBackground(email, code, pendingRegistration) {
     })
 }
 
-function normalizeClientOrigin(value, fallback = 'https://miitverse-xi.vercel.app') {
-  const rawOrigin = String(value ?? '').trim()
-  const cleanedOrigin = rawOrigin.replace(/\/+$/g, '')
-
-  if (!cleanedOrigin) {
-    return fallback
-  }
-
-  if (/^https?:\/\//i.test(cleanedOrigin)) {
-    return cleanedOrigin
-  }
-
-  return `https://${cleanedOrigin}`
-}
-
-function getCanonicalClientOrigin() {
-  const vercelOrigin = process.env.VERCEL_URL ? normalizeClientOrigin(`https://${process.env.VERCEL_URL}`, '') : ''
-  const renderOrigin = normalizeClientOrigin(process.env.RENDER_EXTERNAL_URL, '')
-  const configuredOrigin = normalizeClientOrigin(env.clientOrigin, '')
-  const fallbackOrigin = 'https://miitverse-xi.vercel.app'
-
-  return [vercelOrigin, renderOrigin, configuredOrigin, fallbackOrigin].find(Boolean) || fallbackOrigin
-}
-
-export function buildInvitationLink(email) {
-  const cleanOrigin = getCanonicalClientOrigin().replace(/\/+$/g, '')
+export function buildInvitationLink(email, req) {
+  const cleanOrigin = getCanonicalClientOrigin(req).replace(/\/+$/g, '')
   const encodedEmail = encodeURIComponent(String(email ?? '').trim())
   return `${cleanOrigin}/register?email=${encodedEmail}`
 }
 
-async function sendInvitationEmail(toEmail) {
-  const invitationLink = buildInvitationLink(toEmail)
-  const assetOrigin = getCanonicalClientOrigin()
+async function sendInvitationEmail(toEmail, req) {
+  const invitationLink = buildInvitationLink(toEmail, req)
+  const assetOrigin = getCanonicalClientOrigin(req)
   const html = `
     <div style="margin:0; padding:0; background:#eef1f8;">
       <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="border-collapse:collapse; background:#eef1f8;">
@@ -258,7 +235,7 @@ export async function sendInvitations(req, res) {
     }
 
     try {
-      await sendInvitationEmail(email)
+      await sendInvitationEmail(email, req)
       invited.push(email)
     } catch (error) {
       failed.push({ email, reason: error.message || 'Failed to send invitation' })

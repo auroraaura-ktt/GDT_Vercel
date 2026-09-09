@@ -52,13 +52,39 @@ test('buildInvitationLink prefers the Vercel production host over stale Render d
   const originalClientOrigin = process.env.CLIENT_ORIGIN
 
   process.env.RENDER_EXTERNAL_URL = 'https://miitverse.onrender.com'
-  process.env.VERCEL_URL = 'miitverse-xi.vercel.app'
-  process.env.CLIENT_ORIGIN = 'https://miitverse-xi.vercel.app'
+  process.env.VERCEL_URL = 'vercel.com'
+  process.env.CLIENT_ORIGIN = 'https://miitverse.onrender.com'
 
   try {
     assert.equal(
       buildInvitationLink('student@miit.edu.mm'),
       'https://miitverse-xi.vercel.app/register?email=student%40miit.edu.mm'
+    )
+  } finally {
+    if (originalRenderOrigin === undefined) delete process.env.RENDER_EXTERNAL_URL
+    else process.env.RENDER_EXTERNAL_URL = originalRenderOrigin
+
+    if (originalVercelUrl === undefined) delete process.env.VERCEL_URL
+    else process.env.VERCEL_URL = originalVercelUrl
+
+    if (originalClientOrigin === undefined) delete process.env.CLIENT_ORIGIN
+    else process.env.CLIENT_ORIGIN = originalClientOrigin
+  }
+})
+
+test('buildInvitationLink uses the gdt-vercel app origin from the admin request', () => {
+  const originalClientOrigin = process.env.CLIENT_ORIGIN
+  const originalVercelUrl = process.env.VERCEL_URL
+  const originalRenderOrigin = process.env.RENDER_EXTERNAL_URL
+
+  process.env.CLIENT_ORIGIN = 'https://miitverse-xi.vercel.app,https://gdt-vercel.vercel.app'
+  process.env.VERCEL_URL = 'vercel.com'
+  process.env.RENDER_EXTERNAL_URL = 'https://miitverse.onrender.com'
+
+  try {
+    assert.equal(
+      buildInvitationLink('student@miit.edu.mm', { headers: { origin: 'https://gdt-vercel.vercel.app' } }),
+      'https://gdt-vercel.vercel.app/register?email=student%40miit.edu.mm'
     )
   } finally {
     if (originalRenderOrigin === undefined) delete process.env.RENDER_EXTERNAL_URL
