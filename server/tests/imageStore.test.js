@@ -1,17 +1,18 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { existsSync, readFileSync, rmSync } from 'node:fs'
-import { resolve } from 'node:path'
+import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 import {
+  extractBuffer,
   inferContentType,
   isMongoConnected,
   storeImage,
   serveImageFromStorage,
 } from '../src/utils/imageStore.js'
 
-const __dirname = fileURLToPath(import.meta.url)
+const __dirname = dirname(fileURLToPath(import.meta.url))
 const testUploadDir = resolve(__dirname, '..', 'data', 'uploads')
 
 test('inferContentType returns correct MIME types for common extensions', () => {
@@ -101,6 +102,17 @@ test('serveImageFromStorage returns 404 for missing images', async () => {
 
   await serveImageFromStorage(req, res)
   assert.equal(sentStatus, 404)
+})
+
+test('extractBuffer accepts BSON Binary, Buffer JSON, and Uint8Array shapes', () => {
+  const bytes = Buffer.from('hello-image')
+
+  assert.equal(extractBuffer({ data: bytes }).toString(), 'hello-image')
+  assert.equal(extractBuffer({ data: Uint8Array.from(bytes) }).toString(), 'hello-image')
+  assert.equal(extractBuffer({ data: { type: 'Buffer', data: [...bytes] } }).toString(), 'hello-image')
+  assert.equal(extractBuffer({ data: { buffer: Uint8Array.from(bytes) } }).toString(), 'hello-image')
+  assert.equal(extractBuffer({ data: { base64: bytes.toString('base64') } }).toString(), 'hello-image')
+  assert.equal(extractBuffer({ data: null }), null)
 })
 
 test('serveImageFromStorage rejects path traversal attempts', async () => {

@@ -95,7 +95,12 @@ router.post('/uploads', authMiddleware, upload.single('image'), async (req, res)
   }
 
   const fileName = `${Date.now()}-${file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'upload'}`;
-  await storeImage(file.buffer, fileName, file.mimetype);
+  try {
+    await storeImage(file.buffer, fileName, file.mimetype);
+  } catch (error) {
+    console.error('[POST /api/social/uploads] image store failed:', error.message);
+    return res.status(503).json({ message: 'Image could not be saved. Please try again.' });
+  }
 
   const imageUrl = `/api/social/uploads/${fileName}`;
   res.json({ imageUrl });
@@ -269,11 +274,28 @@ router.post('/posts', authMiddleware, upload.single('image'), async (req, res) =
 
   let resolvedImageUrl = imageUrl;
 
+  console.log('[POST /api/social/posts] create', {
+    hasBodyText: Boolean(content),
+    bodyImage: typeof req.body?.image === 'string' ? req.body.image : null,
+    hasFile: Boolean(req.file),
+    fileField: req.file?.fieldname,
+    fileName: req.file?.originalname,
+    mimeType: req.file?.mimetype,
+    fileSize: req.file?.size,
+  })
+
   if (req.file) {
     const fileName = `${Date.now()}-${req.file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'upload'}`;
-    await storeImage(req.file.buffer, fileName, req.file.mimetype);
-    resolvedImageUrl = `/api/social/uploads/${fileName}`;
+    try {
+      await storeImage(req.file.buffer, fileName, req.file.mimetype);
+      resolvedImageUrl = `/api/social/uploads/${fileName}`;
+    } catch (error) {
+      console.error('[POST /api/social/posts] image store failed:', error.message);
+      return res.status(503).json({ message: 'Image could not be saved. Please try again.' });
+    }
   }
+
+  console.log('[POST /api/social/posts] stored image URL:', resolvedImageUrl)
 
   if (!content.trim() && !resolvedImageUrl) {
     return res.status(400).json({ message: 'Post content or an image is required' });

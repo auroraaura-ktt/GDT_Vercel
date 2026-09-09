@@ -3,10 +3,13 @@ import { existsSync, readFileSync, mkdirSync, writeFileSync } from 'node:fs'
 import { basename, dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { connectMongoDB } from '../config/mongodb.js'
+
 const __dirname = dirname(fileURLToPath(import.meta.url))
 const localUploadDir = resolve(__dirname, '..', '..', 'data', 'uploads')
 
 const MAX_MONGO_IMAGE_SIZE = 15 * 1024 * 1024 // 15 MB — stays under MongoDB's 16 MB doc limit
+const isVercelRuntime = Boolean(process.env.VERCEL)
 
 const imageSchema = new mongoose.Schema(
   {
@@ -31,10 +34,56 @@ export function isMongoConnected() {
   return mongoose.connection.readyState === 1
 }
 
+function isProductionRuntime() {
+  return isVercelRuntime || process.env.NODE_ENV === 'production'
+}
+
+/**
+ * The HTTP server starts before MongoDB finishes connecting. Wait for (or
+ * trigger) that connection so Vercel does not silently write images to an
+ * ephemeral container disk and then 404 them on the next request.
+ */
+export async function ensureMongoForImages() {
+  if (isMongoConnected()) return true
+
+  if (mongoose.connection.readyState === 2) {
+    await new Promise((resolve) => {
+      const finish = () => {
+        mongoose.connection.off('connected', finish)
+        mongoose.connection.off('error', finish)
+        resolve()
+      }
+      mongoose.connection.once('connected', finish)
+      mongoose.connection.once('error', finish)
+      setTimeout(finish, 10000)
+    })
+    return isMongoConnected()
+  }
+
+  // Local tests and `npm run dev` keep the disk fallback. Production (Vercel)
+  // must connect instead of writing to an ephemeral container filesystem.
+  if (!isProductionRuntime()) {
+    return false
+  }
+
+  try {
+    await connectMongoDB()
+  } catch (error) {
+    console.warn('MongoDB image store could not connect:', error.message)
+  }
+
+  return isMongoConnected()
+}
+
 function sanitizeFileName(fileName) {
-  // Prevent path traversal: only keep the basename and block suspicious sequences.
-  const base = basename(String(fileName || ''))
-  if (!base || base.includes('..') || base.startsWith('.')) {
+  // Prevent path traversal: reject any path separators or parent segments
+  // before keeping only the basename.
+  const raw = String(fileName || '')
+  if (!raw || raw.includes('..') || raw.includes('/') || raw.includes('\\')) {
+    return null
+  }
+  const base = basename(raw)
+  if (!base || base.startsWith('.')) {
     return null
   }
   return base
@@ -58,9 +107,10 @@ export function inferContentType(fileName) {
  */
 export async function storeImage(buffer, fileName, contentType = 'application/octet-stream') {
   const safeName = sanitizeFileName(fileName) || `${Date.now()}-upload`
+  const mongoReady = await ensureMongoForImages()
 
   // Prefer MongoDB — it is the persistent, shared store on Vercel.
-  if (isMongoConnected()) {
+  if (mongoReady) {
     if (Buffer.isBuffer(buffer) && buffer.length > MAX_MONGO_IMAGE_SIZE) {
       throw new Error(
         `Image is larger than the ${MAX_MONGO_IMAGE_SIZE / 1024 / 1024} MB MongoDB storage limit.`
@@ -77,10 +127,16 @@ export async function storeImage(buffer, fileName, contentType = 'application/oc
         },
         { upsert: true, new: true }
       )
+      console.log('[imageStore] saved to MongoDB', { imageId: safeName, bytes: buffer?.length, contentType })
       return safeName
     } catch (error) {
-      console.warn('MongoDB image store failed, falling back to local disk:', error.message)
+      console.warn('MongoDB image store failed:', error.message)
+      if (isProductionRuntime()) {
+        throw error
+      }
     }
+  } else if (isProductionRuntime()) {
+    throw new Error('MongoDB is not connected; cannot store images in production.')
   }
 
   // Fallback: local filesystem (local development / degraded mode).
@@ -90,14 +146,18 @@ export async function storeImage(buffer, fileName, contentType = 'application/oc
   return safeName
 }
 
-function extractBuffer(doc) {
+export function extractBuffer(doc) {
   if (!doc) return null
   const raw = doc.data
+  if (!raw) return null
   if (Buffer.isBuffer(raw)) return raw
-  // Mongoose sometimes returns binary data as { type, data } or a plain array
-  // when using .lean(). Coerce back to a Buffer.
+  if (raw instanceof Uint8Array) return Buffer.from(raw)
+  // Mongoose .lean() / BSON Binary can arrive as several object shapes.
   if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    if (Buffer.isBuffer(raw.buffer)) return raw.buffer
+    if (raw.buffer instanceof Uint8Array) return Buffer.from(raw.buffer)
     if (Array.isArray(raw.data)) return Buffer.from(raw.data)
+    if (raw.data instanceof Uint8Array || Buffer.isBuffer(raw.data)) return Buffer.from(raw.data)
     if (typeof raw.base64 === 'string') return Buffer.from(raw.base64, 'base64')
   }
   if (Array.isArray(raw)) return Buffer.from(raw)
@@ -118,7 +178,8 @@ export async function serveImageFromStorage(req, res) {
   }
 
   // 1. Try MongoDB (persistent — works on Vercel).
-  if (isMongoConnected()) {
+  const mongoReady = await ensureMongoForImages()
+  if (mongoReady) {
     try {
       const doc = await ImageModel.findOne({ imageId: fileName }).lean()
       const imageData = extractBuffer(doc)
@@ -127,6 +188,7 @@ export async function serveImageFromStorage(req, res) {
         res.set('Cache-Control', 'public, max-age=31536000, immutable')
         return res.send(imageData)
       }
+      console.warn('[imageStore] MongoDB miss for image', { imageId: fileName, hasDoc: Boolean(doc), bytes: imageData?.length || 0 })
     } catch (error) {
       console.warn('Failed to read image from MongoDB, trying local disk:', error.message)
     }
