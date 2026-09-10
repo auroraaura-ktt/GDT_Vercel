@@ -1,38 +1,9 @@
-import sgMail from '@sendgrid/mail'
 import nodemailer from 'nodemailer'
 
 import { env } from '../config/env.js'
 
-const FALLBACK_SENDGRID_FROM = 'noreply@sendgrid.net'
-
-export function resolveSendgridFromAddress(fromEmail) {
-  const configuredValue = String(fromEmail || '').trim()
-
-  if (!configuredValue) {
-    return FALLBACK_SENDGRID_FROM
-  }
-
-  const emailToCheck = configuredValue.toLowerCase()
-  const personalProviders = ['@gmail.com', '@hotmail.com', '@outlook.com', '@yahoo.com', '@icloud.com', '@live.com', '@msn.com']
-
-  if (personalProviders.some((provider) => emailToCheck.includes(provider))) {
-    return FALLBACK_SENDGRID_FROM
-  }
-
-  return configuredValue
-}
-
-export function decideEmailFallbackRoute({ sendgridEnabled, gmailEnabled } = {}) {
-  const sendgridIsEnabled = Boolean(sendgridEnabled)
+export function decideEmailFallbackRoute({ gmailEnabled } = {}) {
   const gmailIsEnabled = Boolean(gmailEnabled)
-
-  if (sendgridIsEnabled && gmailIsEnabled) {
-    return ['sendgrid', 'gmail']
-  }
-
-  if (sendgridIsEnabled) {
-    return ['sendgrid', 'none']
-  }
 
   if (gmailIsEnabled) {
     return ['gmail', 'none']
@@ -49,10 +20,6 @@ export function getPrimaryEmailSender(provider, configuredEmail, fallbackValue =
   }
 
   return fallbackValue
-}
-
-if (env.sendgridApiKey) {
-  sgMail.setApiKey(env.sendgridApiKey)
 }
 
 function buildVerificationEmailPayload(code) {
@@ -76,37 +43,13 @@ function buildVerificationEmailPayload(code) {
   }
 }
 
-async function sendWithSendGrid({ to, subject, html, text }) {
-  if (!env.sendgridApiKey) {
-    throw new Error('SendGrid API key not configured')
-  }
-
-  const fromAddress = resolveSendgridFromAddress(env.sendgridFromEmail)
-  const payload = {
-    to,
-    from: `${env.sendgridFromName} <${fromAddress}>`,
-    replyTo: `${env.sendgridFromName} <${fromAddress}>`,
-    subject,
-    html,
-    text,
-    headers: {
-      'X-Priority': '3',
-      'X-Mailer': 'MiitVerse Mailer',
-    },
-  }
-
-  const result = await sgMail.send(payload)
-  console.log('Verification email sent successfully via SendGrid:', result[0].statusCode, result[0].headers['x-message-id'])
-  return true
-}
-
 async function sendWithGmailSmtp({ to, subject, html, text }) {
   const gmailUser = String(env.gmailUser || '').trim()
   const gmailPassword = String(env.gmailAppPassword || '').trim()
   const gmailFromAddress = String(env.gmailFromEmail || gmailUser || '').trim()
 
   if (!gmailUser || !gmailPassword || !gmailFromAddress) {
-    throw new Error('Gmail SMTP backup is not configured')
+    throw new Error('Gmail SMTP is not configured')
   }
 
   const transporter = nodemailer.createTransport({
@@ -120,7 +63,7 @@ async function sendWithGmailSmtp({ to, subject, html, text }) {
   })
 
   const result = await transporter.sendMail({
-    from: `${env.sendgridFromName || 'MiitVerse'} <${gmailFromAddress}>`,
+    from: `MiitVerse <${gmailFromAddress}>`,
     to,
     subject,
     html,
@@ -133,7 +76,6 @@ async function sendWithGmailSmtp({ to, subject, html, text }) {
 
 async function sendWithConfiguredProvider(to, subject, html, text) {
   const [primaryProvider, backupProvider] = decideEmailFallbackRoute({
-    sendgridEnabled: Boolean(env.sendgridApiKey),
     gmailEnabled: Boolean(env.gmailUser && env.gmailAppPassword),
   })
 
@@ -147,10 +89,6 @@ async function sendWithConfiguredProvider(to, subject, html, text) {
 
   for (const provider of providerOrder) {
     try {
-      if (provider === 'sendgrid') {
-        return await sendWithSendGrid({ to, subject, html, text })
-      }
-
       if (provider === 'gmail') {
         return await sendWithGmailSmtp({ to, subject, html, text })
       }
@@ -175,14 +113,13 @@ export async function sendVerificationEmail(email, code) {
 }
 
 /**
- * Verify SendGrid connection
+ * Verify email service configuration
  * @returns {Promise<boolean>}
  */
 export async function verifyEmailConnection() {
-  const hasSendgrid = Boolean(env.sendgridApiKey)
   const hasGmail = Boolean(env.gmailUser && env.gmailAppPassword)
 
-  if (!hasSendgrid && !hasGmail) {
+  if (!hasGmail) {
     console.warn('No email providers configured')
     return false
   }

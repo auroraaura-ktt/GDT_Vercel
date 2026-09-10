@@ -5,7 +5,6 @@ import { createPageRecord, getPageRecordBySlug, getPageRecordByOwner, listPageRe
 import { listPageUsersFromMongo } from '../utils/userPersistence.js'
 import { authMiddleware } from '../middleware/authMiddleware.js'
 import { requireRole } from '../middleware/roleMiddleware.js'
-import { env } from '../config/env.js'
 
 const router = Router()
 
@@ -101,14 +100,19 @@ router.get('/pages/:slug', authMiddleware, async (req, res) => {
 })
 router.get('/invitations/history', authMiddleware, requireRole('admin'), async (req, res) => {
   try {
-    if (!env.sendgridApiKey) {
+    // Legacy SendGrid activity lookup for the admin invitation history view.
+    // This does not affect verification emails, which use the Gmail SMTP service.
+    const legacySendgridApiKey = process.env.SENDGRID_API_KEY || ''
+    const legacySendgridFromEmail = process.env.SENDGRID_FROM_EMAIL || ''
+
+    if (!legacySendgridApiKey) {
       return res.status(500).json({ message: 'Email service not configured' })
     }
 
-    const query = `from_email = "${env.sendgridFromEmail}" AND subject = "You are invited to join MiitVerse"`
+    const query = `from_email = "${legacySendgridFromEmail}" AND subject = "You are invited to join MiitVerse"`
     const url = `https://api.sendgrid.com/v3/messages?limit=50&query=${encodeURIComponent(query)}`
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${env.sendgridApiKey}` },
+      headers: { Authorization: `Bearer ${legacySendgridApiKey}` },
     })
 
     if (!response.ok) {
