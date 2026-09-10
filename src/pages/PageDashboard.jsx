@@ -4,8 +4,8 @@ import { FaArrowLeft, FaBullhorn, FaChartLine, FaImage, FaPen } from 'react-icon
 
 import { useAuth } from '../context/useAuth'
 import { apiRequest, resolveApiUrl } from '../lib/api'
-import { buildPagePost, normalizePagePosts } from '../lib/pagePosts'
 import LoadingState from '../components/LoadingState'
+import PostList from '../components/PostList'
 import './PageDashboard.css'
 
 export default function PageDashboard() {
@@ -60,7 +60,12 @@ export default function PageDashboard() {
         const data = await apiRequest(`/social/posts?userId=${encodeURIComponent(page.id)}`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (active) setPosts(normalizePagePosts(data.posts || []))
+        if (active) setPosts((data.posts || []).map((post) => ({
+          ...post,
+          pageName: post.pageName || page.pageName,
+          username: post.username || page.pageName,
+          profilePicture: post.profilePicture || page.coverImage || null,
+        })))
       } catch {
         if (active) setPosts([])
       }
@@ -68,7 +73,7 @@ export default function PageDashboard() {
 
     loadPosts()
     return () => { active = false }
-  }, [page?.id, token])
+  }, [page?.coverImage, page?.id, page?.pageName, token])
 
   const pageTitle = useMemo(() => page?.pageName || 'Page Dashboard', [page])
   const pageInitial = pageTitle.trim().charAt(0).toUpperCase() || 'P'
@@ -102,7 +107,12 @@ export default function PageDashboard() {
         body: formData,
       })
 
-      setPosts((currentPosts) => normalizePagePosts([buildPagePost(data.post), ...currentPosts]))
+      setPosts((currentPosts) => [{
+        ...data.post,
+        pageName: page.pageName,
+        username: page.pageName,
+        profilePicture: page.coverImage || null,
+      }, ...currentPosts])
       setDraft('')
       setImageFile(null)
       setImagePreview(null)
@@ -113,6 +123,16 @@ export default function PageDashboard() {
     } finally {
       setPosting(false)
     }
+  }
+
+  const handlePostUpdated = (updatedPost) => {
+    setPosts((currentPosts) => currentPosts.map((post) => (
+      String(post.id) === String(updatedPost?.id) ? { ...post, ...updatedPost } : post
+    )))
+  }
+
+  const handlePostDeleted = (postId) => {
+    setPosts((currentPosts) => currentPosts.filter((post) => String(post.id) !== String(postId)))
   }
 
   const handleImageChange = (event) => {
@@ -160,7 +180,7 @@ export default function PageDashboard() {
       return (
         <section className="page-posts-card" id="recent-posts">
           <div className="page-card-heading"><div><p className="page-kicker">ACTIVITY</p><h2>Recent page posts</h2></div><span className="page-post-count">{posts.length} total</span></div>
-          {posts.length === 0 ? <div className="page-empty-state"><FaBullhorn /><h3>Your page has no posts yet</h3><p>Create the first update to start your page activity.</p><button type="button" className="page-empty-action" onClick={() => setActiveTab('create-post')}>Create an update</button></div> : <div className="page-post-list">{posts.map((post) => <article className="page-post" key={post.id}><span className="page-avatar small">{pageInitial}</span><div><strong>{pageTitle}</strong><time>{new Date(post.createdAt).toLocaleString()}</time><p>{post.content}</p>{post.image && <img src={resolveApiUrl(post.image.replace(/^\/api(?=\/)/, ''))} alt="Post attachment" />}</div></article>)}</div>}
+          {posts.length === 0 ? <div className="page-empty-state"><FaBullhorn /><h3>Your page has no posts yet</h3><p>Create the first update to start your page activity.</p><button type="button" className="page-empty-action" onClick={() => setActiveTab('create-post')}>Create an update</button></div> : <PostList posts={posts} onPostUpdated={handlePostUpdated} onPostDeleted={handlePostDeleted} />}
         </section>
       )
     }

@@ -144,6 +144,10 @@ export default function Feed() {
     )))
   }, [])
 
+  const handlePostDeleted = useCallback((postId) => {
+    setPosts((currentPosts) => currentPosts.filter((post) => String(post.id) !== String(postId)))
+  }, [])
+
   const handleAddPost = async (newPost) => {
     // A browser File / object-URL is only valid for a live preview. It must
     // never be serialized into local state or fed back as a permanent image
@@ -354,6 +358,7 @@ export default function Feed() {
           posts={feedPosts}
           isLoading={isLoading}
           onPostUpdated={handlePostUpdated}
+          onPostDeleted={handlePostDeleted}
         />
         {feedError && <div className="feed-load-error" role="alert">{feedError}<button type="button" onClick={() => loadFeedData({ reset: !feedError.includes("more") })}>Retry</button></div>}
         <div ref={loadMoreRef} className="feed-load-status" aria-live="polite">

@@ -66,6 +66,7 @@ async function enrichPostAuthors(posts = []) {
         author: pageName,
         username: pageName,
         profilePicture: post.profilePicture || page.coverImage || null,
+        pageOwnerId: page.ownerId || null,
       }
     }
 
@@ -413,6 +414,55 @@ router.post('/posts/:id/reports', authMiddleware, (req, res) => {
 
   return res.status(201).json({ report: result.report });
 });
+
+async function findOwnedPost(req, postId) {
+  const [post] = await listSocialPostsFromMongo({ id: String(postId), includeSuspended: true })
+  if (!post) return null
+
+  if (String(post.userId) === String(req.user.id) || req.user.role === 'admin') return post
+
+  // Page posts are published on behalf of a page. The page owner (and the
+  // existing page administrator) may manage those posts, but other users may
+  // not use the post id to mutate them.
+  if (post.source === 'page' || post.postType === 'page') {
+    const pages = await listPageRecords()
+    const page = (pages || []).find((item) => String(item?.id) === String(post.userId))
+    if (String(page?.ownerId) === String(req.user.id)) return post
+  }
+
+  return null
+}
+
+router.patch('/posts/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const post = await findOwnedPost(req, req.params.id)
+    if (!post) return res.status(403).json({ message: 'You can only edit your own posts.' })
+
+    const content = String(req.body?.content ?? post.content ?? '').trim()
+    if (!content && !post.image) return res.status(400).json({ message: 'Post content or an image is required' })
+    if (content.length > 5000) return res.status(400).json({ message: 'Post content must be 5000 characters or fewer' })
+
+    const updated = { ...post, ...req.body, content }
+    await persistSocialPost(updated)
+    updateSocialPostById(post.id, { content })
+    return res.json({ post: updated })
+  } catch (error) {
+    return next(error)
+  }
+})
+
+router.delete('/posts/:id', authMiddleware, async (req, res, next) => {
+  try {
+    const post = await findOwnedPost(req, req.params.id)
+    if (!post) return res.status(403).json({ message: 'You can only delete your own posts.' })
+
+    await deleteSocialPostFromDatabases(post.id)
+    deleteSocialPostById(post.id)
+    return res.json({ message: 'Deleted', id: post.id })
+  } catch (error) {
+    return next(error)
+  }
+})
 
 router.get('/reports', authMiddleware, requireRole('admin'), (req, res) => {
   res.json({ reports: listReports() });

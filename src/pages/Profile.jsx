@@ -15,6 +15,8 @@ import {
 } from 'react-icons/fa'
 
 import { useAuth } from '../context/useAuth'
+import { apiRequest } from '../lib/api'
+import PostList from '../components/PostList'
 import './Profile.css'
 
 function getInitials(username = '') {
@@ -49,6 +51,7 @@ export default function Profile() {
     updateProfile,
     updateAvatar,
     changePassword,
+    token,
   } = useAuth()
 
   const fileInputRef = useRef(null)
@@ -70,11 +73,51 @@ export default function Profile() {
   const [avatarStatus, setAvatarStatus] = useState('')
   const [avatarError, setAvatarError] = useState('')
   const [avatarUploading, setAvatarUploading] = useState(false)
+  const [posts, setPosts] = useState([])
+  const [postsLoading, setPostsLoading] = useState(true)
 
   const initials = useMemo(
     () => getInitials(user?.username),
     [user?.username]
   )
+
+  useEffect(() => {
+    let active = true
+
+    if (!user?.id) {
+      setPosts([])
+      setPostsLoading(false)
+      return () => { active = false }
+    }
+
+    async function loadPosts() {
+      setPostsLoading(true)
+      try {
+        const data = await apiRequest(`/social/posts?userId=${encodeURIComponent(user.id)}`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+        })
+        if (active) setPosts(Array.isArray(data.posts) ? data.posts : [])
+      } catch (error) {
+        console.error('Failed to load profile posts:', error)
+        if (active) setPosts([])
+      } finally {
+        if (active) setPostsLoading(false)
+      }
+    }
+
+    loadPosts()
+    return () => { active = false }
+  }, [token, user?.id])
+
+  function handlePostUpdated(updatedPost) {
+    setPosts((currentPosts) => currentPosts.map((post) => (
+      String(post.id) === String(updatedPost?.id) ? { ...post, ...updatedPost } : post
+    )))
+  }
+
+  function handlePostDeleted(postId) {
+    setPosts((currentPosts) => currentPosts.filter((post) => String(post.id) !== String(postId)))
+  }
 
   if (!user) {
     return null
@@ -339,6 +382,22 @@ export default function Profile() {
 
             </div>
           </div>
+        </section>
+
+        <section className="mv-posts-section">
+          <div className="mv-posts-heading">
+            <div>
+              <p className="mv-section-kicker">PUBLISHED POSTS</p>
+              <h2>Your posts</h2>
+            </div>
+            <span>{posts.length} total</span>
+          </div>
+          <PostList
+            posts={posts}
+            isLoading={postsLoading}
+            onPostUpdated={handlePostUpdated}
+            onPostDeleted={handlePostDeleted}
+          />
         </section>
 
         {/* ACCOUNT INFORMATION */}

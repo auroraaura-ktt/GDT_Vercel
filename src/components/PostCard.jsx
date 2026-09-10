@@ -20,7 +20,7 @@ function formatTimestamp(value) {
   return `${Math.floor(minutesAgo / 1440)}d ago`;
 }
 
-export default function PostCard({ post = {}, onPostUpdated }) {
+export default function PostCard({ post = {}, onPostUpdated, onPostDeleted }) {
   const { user } = useAuth();
   const verifiedAuthors = useVerifiedAuthors();
 
@@ -67,6 +67,8 @@ export default function PostCard({ post = {}, onPostUpdated }) {
   const [liking, setLiking] = useState(false);
   const [reporting, setReporting] = useState(false);
   const [reported, setReported] = useState(false);
+  const [showPostMenu, setShowPostMenu] = useState(false);
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
 
   const [showReactionModal, setShowReactionModal] = useState(false);
 
@@ -136,6 +138,42 @@ export default function PostCard({ post = {}, onPostUpdated }) {
 
   const handleReactionCountClick = () => {
     setShowReactionModal(true);
+  };
+
+  const canManagePost = Boolean(user?.id) && (
+    String(postUserId) === String(user.id) ||
+    String(post.pageOwnerId) === String(user.id) ||
+    user.role === "admin"
+  );
+
+  const handleEdit = async () => {
+    const nextContent = window.prompt("Edit your post", content);
+    if (nextContent === null || nextContent.trim() === content.trim()) return;
+    if (!nextContent.trim()) return;
+
+    setIsSavingEdit(true);
+    try {
+      const result = await apiRequest(`/social/posts/${encodeURIComponent(id)}`, {
+        method: "PATCH",
+        body: JSON.stringify({ content: nextContent.trim() }),
+      });
+      onPostUpdated?.(result.post);
+      setShowPostMenu(false);
+    } catch (error) {
+      window.alert(error.message || "We could not update this post.");
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!window.confirm("Delete this post? This cannot be undone.")) return;
+    try {
+      await apiRequest(`/social/posts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      onPostDeleted?.(id);
+    } catch (error) {
+      window.alert(error.message || "We could not delete this post.");
+    }
   };
 
   // Page posts carry their full page name; fall back to the regular username.
@@ -228,7 +266,24 @@ export default function PostCard({ post = {}, onPostUpdated }) {
             </div>
           </div>
 
-          <span style={{ fontSize: "20px", cursor: "pointer" }}>⋯</span>
+          {canManagePost && (
+            <div className="post-card-menu">
+              <button
+                type="button"
+                className="post-card-menu-trigger"
+                aria-label="Post options"
+                onClick={() => setShowPostMenu((visible) => !visible)}
+              >
+                ⋯
+              </button>
+              {showPostMenu && (
+                <div className="post-card-menu-dropdown">
+                  <button type="button" onClick={handleEdit} disabled={isSavingEdit}>Edit</button>
+                  <button type="button" onClick={handleDelete}>Delete</button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div style={{ padding: "0 16px 16px" }}>
@@ -376,19 +431,19 @@ export default function PostCard({ post = {}, onPostUpdated }) {
 
         </div>
 
-        <div className="post-engagement" style={{ padding: "12px 16px" }}>
-          <p
-            className="post-card-body"
-            style={{
-              lineHeight: "1.5",
-              fontSize: "14px",
-              marginBottom: "0",
-            }}
-          >
-            <strong>{displayName}</strong> {isVerified && <VerifiedBadge size="small" />} {content.substring(0, 80)}
-            {content.length > 80 ? "..." : ""}
-          </p>
-        </div>
+        {postComments.length > 0 && (
+          <div className="post-comments" aria-label="Comments">
+            {postComments.map((comment, index) => {
+              const commentName = comment?.username || comment?.author || "MiitVerse member";
+              return (
+                <div className="post-comment" key={comment?.id || `${commentName}-${index}`}>
+                  <strong>{commentName}</strong>
+                  <p>{comment?.content || comment?.text || ""}</p>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
     </>
   );
