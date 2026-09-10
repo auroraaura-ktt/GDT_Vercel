@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { FaCamera, FaPaperPlane, FaSync } from "react-icons/fa";
+import { FaCamera, FaPaperPlane, FaPaperclip, FaSync } from "react-icons/fa";
 import { useAuth } from "../context/useAuth";
 
 const MAX_POST_LENGTH = 280;
@@ -12,6 +12,14 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [selectedImage, setSelectedImage] = useState(null);
   const [imagePreview, setImagePreview] = useState("");
+  // Multiple-photo support: every selected file belongs to ONE post. The old
+  // single-image state is kept so the existing single-photo flow is untouched.
+  const [selectedImages, setSelectedImages] = useState([]);
+  // File attachment support: rides the same existing 'images' upload path as
+  // photos, so photos + files submit together as ONE post.
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const MAX_PHOTOS = 10;
+  const MAX_FILE_SIZE = 15 * 1024 * 1024; // matches the existing backend upload limit
   const videoRef = useRef(null);
   const streamRef = useRef(null);
 
@@ -62,13 +70,66 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
   }
 
   function handleImageSelect(event) {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
 
-    const previewUrl = URL.createObjectURL(file);
-    setSelectedImage(file);
-    setImagePreview(previewUrl);
-    setErrorMessage("");
+    const imageFiles = files.filter((file) => file.type.startsWith("image/"));
+    if (imageFiles.length === 0) {
+      setErrorMessage("Only image files can be attached.");
+      return;
+    }
+
+    setSelectedImages((current) => [...current, ...imageFiles].slice(0, MAX_PHOTOS));
+
+    const skippedCount = files.length - imageFiles.length;
+    if (skippedCount > 0) {
+      setErrorMessage(`${skippedCount} file(s) skipped because they are not images.`);
+    } else {
+      setErrorMessage("");
+    }
+  }
+
+  function handleRemoveImage(index) {
+    setSelectedImages((current) => current.filter((_, position) => position !== index));
+  }
+
+  function handleFileSelect(event) {
+    const files = Array.from(event.target.files || []);
+    if (files.length === 0) return;
+
+    const totalSelected = selectedImages.length + selectedFiles.length;
+    const room = MAX_PHOTOS - totalSelected;
+    if (room <= 0) {
+      setErrorMessage(`A post can contain at most ${MAX_PHOTOS} photos/files in total.`);
+      return;
+    }
+
+    const accepted = [];
+    let oversized = 0;
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        oversized += 1;
+        continue;
+      }
+      accepted.push(file);
+      if (accepted.length >= room) break;
+    }
+
+    if (accepted.length > 0) {
+      setSelectedFiles((current) => [...current, ...accepted]);
+    }
+
+    if (oversized > 0) {
+      setErrorMessage(`${oversized} file(s) skipped because they exceed the 15 MB size limit.`);
+    } else if (accepted.length < files.length) {
+      setErrorMessage(`A post can contain at most ${MAX_PHOTOS} photos/files in total.`);
+    } else {
+      setErrorMessage("");
+    }
+  }
+
+  function handleRemoveFile(index) {
+    setSelectedFiles((current) => current.filter((_, position) => position !== index));
   }
 
   function handlePostSubmit(event) {
@@ -76,7 +137,7 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
 
     const trimmedContent = content.trim();
 
-    if (!trimmedContent && !selectedImage) {
+    if (!trimmedContent && selectedImages.length === 0 && selectedFiles.length === 0) {
       setErrorMessage("Please write something before posting.");
       return;
     }
@@ -102,7 +163,10 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
       profilePicture: user?.profilePicture || null,
       content: trimmedContent,
       image: null,
-      imageFile: selectedImage || null,
+      imageFile: selectedImages[0] || null,
+      imageFiles: selectedImages.length + selectedFiles.length > 0
+        ? [...selectedImages, ...selectedFiles]
+        : null,
       createdAt: new Date().toISOString(),
       likes: 0,
       comments: [],
@@ -118,6 +182,8 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
     setErrorMessage("");
     setSelectedImage(null);
     setImagePreview("");
+    setSelectedImages([]);
+    setSelectedFiles([]);
   }
 
   return (
@@ -149,7 +215,68 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
 
       {streamError && <p className="stream-error">{streamError}</p>}
 
-      {imagePreview && (
+      {selectedFiles.length > 0 && (
+        <div className="create-post-image-preview">
+          {selectedFiles.map((file, index) => (
+            <div
+              key={`${file.name}-${index}`}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                padding: "6px 10px",
+                border: "1px solid #eee",
+                borderRadius: "10px",
+                marginBottom: "6px",
+                fontSize: "14px",
+                color: "#0B1E4F",
+              }}
+            >
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                📄 {file.name}
+              </span>
+              <button
+                type="button"
+                className="close-video-btn"
+                onClick={() => handleRemoveFile(index)}
+                aria-label={`Remove ${file.name}`}
+              >
+                ❌
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {selectedImages.length > 0 && (
+        <div className="create-post-image-preview">
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: "8px" }}>
+            {selectedImages.map((file, index) => (
+              <div key={`${file.name}-${index}`} style={{ position: "relative" }}>
+                <img
+                  src={URL.createObjectURL(file)}
+                  alt={`Selected upload preview ${index + 1}`}
+                  style={{ width: "100%", height: "110px", borderRadius: "12px", objectFit: "cover" }}
+                />
+                <button
+                  type="button"
+                  className="close-video-btn"
+                  style={{ position: "absolute", top: "4px", right: "4px", padding: "2px 8px" }}
+                  onClick={() => handleRemoveImage(index)}
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" className="close-video-btn" onClick={() => setSelectedImages([])}>
+            Remove all photos
+          </button>
+        </div>
+      )}
+
+      {imagePreview && !selectedImages.length && (
         <div className="create-post-image-preview">
           <img src={imagePreview} alt="Selected upload preview" style={{ maxWidth: "100%", maxHeight: "220px", borderRadius: "12px", objectFit: "cover" }} />
           <button type="button" className="close-video-btn" onClick={() => {
@@ -169,7 +296,11 @@ export default function CreatePost({ onAddPost, onRefresh, isRefreshing }) {
       <div className="create-post-actions">
         <label style={{ cursor: "pointer" }}>
           <FaCamera /> Photo
-          <input type="file" accept="image/*" style={{ display: "none" }} onChange={handleImageSelect} />
+          <input type="file" accept="image/*" multiple style={{ display: "none" }} onChange={handleImageSelect} />
+        </label>
+        <label style={{ cursor: "pointer" }}>
+          <FaPaperclip /> File
+          <input type="file" multiple style={{ display: "none" }} onChange={handleFileSelect} />
         </label>
         <button type="button" className="video-trigger" onClick={onRefresh}>
           {isRefreshing ? <span className="button-spinner" aria-hidden="true" /> : <FaSync />} {isRefreshing ? 'Refreshing…' : 'Refresh'}

@@ -14,6 +14,9 @@ const socialPostSchema = new mongoose.Schema(
     profilePicture: { type: String, default: null },
     content: { type: String, default: '' },
     image: { type: String, default: null },
+    // Multiple-photo support. Backward compatible: old posts simply have an
+    // empty/null media array and keep rendering via `image`.
+    media: { type: [mongoose.Schema.Types.Mixed], default: [] },
     createdAt: { type: Date, required: true },
     likes: { type: Number, default: 0 },
     likedBy: { type: [mongoose.Schema.Types.Mixed], default: [] },
@@ -40,6 +43,7 @@ function toDatabasePost(post = {}) {
     profilePicture: post.profilePicture || null,
     content: post.content || '',
     image: post.image || null,
+    media: Array.isArray(post.media) ? post.media : [],
     createdAt: new Date(post.createdAt || Date.now()),
     likes: Number(post.likes || 0),
     likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],
@@ -70,6 +74,7 @@ export function normalizeDatabasePost(post = {}) {
     profilePicture: post.profilePicture ?? post.avatarUrl ?? null,
     content,
     image,
+    media: Array.isArray(post.media) ? post.media : [],
     likes: Number(post.likes || 0),
     likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],
     comments: Array.isArray(post.comments) ? post.comments : [],
@@ -175,6 +180,7 @@ export async function writeSocialPostToNeo4j(post) {
             post.profilePicture = $profilePicture,
             post.content = $content,
             post.image = $image,
+            post.media = $mediaJson,
             post.createdAt = $createdAt,
             post.likes = $likes,
             post.reposts = $reposts,
@@ -191,6 +197,7 @@ export async function writeSocialPostToNeo4j(post) {
       {
         ...databasePost,
         createdAt: databasePost.createdAt.toISOString(),
+        mediaJson: JSON.stringify(databasePost.media || []),
       }
     ))
     return true

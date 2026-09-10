@@ -27,12 +27,12 @@ test('buildInvitationLink uses the canonical MiitVerse origin and encodes the em
 
   delete process.env.RENDER_EXTERNAL_URL
   delete process.env.VERCEL_URL
-  process.env.CLIENT_ORIGIN = 'https://miitverse-xi.vercel.app'
+  process.env.CLIENT_ORIGIN = 'https://gdt-vercel.vercel.app'
 
   try {
     assert.equal(
       buildInvitationLink('student@miit.edu.mm'),
-      'https://miitverse-xi.vercel.app/register?email=student%40miit.edu.mm'
+      'https://gdt-vercel.vercel.app/register?email=student%40miit.edu.mm'
     )
   } finally {
     if (originalRenderOrigin === undefined) delete process.env.RENDER_EXTERNAL_URL
@@ -47,18 +47,13 @@ test('buildInvitationLink uses the canonical MiitVerse origin and encodes the em
 })
 
 test('buildInvitationLink prefers the Vercel production host over stale Render defaults', () => {
-  const originalRenderOrigin = process.env.RENDER_EXTERNAL_URL
   const originalVercelUrl = process.env.VERCEL_URL
   const originalClientOrigin = process.env.CLIENT_ORIGIN
-
-  process.env.RENDER_EXTERNAL_URL = 'https://miitverse.onrender.com'
-  process.env.VERCEL_URL = 'vercel.com'
-  process.env.CLIENT_ORIGIN = 'https://miitverse.onrender.com'
 
   try {
     assert.equal(
       buildInvitationLink('student@miit.edu.mm'),
-      'https://miitverse-xi.vercel.app/register?email=student%40miit.edu.mm'
+      'https://gdt-vercel.vercel.app/register?email=student%40miit.edu.mm'
     )
   } finally {
     if (originalRenderOrigin === undefined) delete process.env.RENDER_EXTERNAL_URL
@@ -75,11 +70,9 @@ test('buildInvitationLink prefers the Vercel production host over stale Render d
 test('buildInvitationLink uses the gdt-vercel app origin from the admin request', () => {
   const originalClientOrigin = process.env.CLIENT_ORIGIN
   const originalVercelUrl = process.env.VERCEL_URL
-  const originalRenderOrigin = process.env.RENDER_EXTERNAL_URL
 
-  process.env.CLIENT_ORIGIN = 'https://miitverse-xi.vercel.app,https://gdt-vercel.vercel.app'
+  process.env.CLIENT_ORIGIN = 'https://miitversebymiit.vercel.app,https://gdt-vercel.vercel.app'
   process.env.VERCEL_URL = 'vercel.com'
-  process.env.RENDER_EXTERNAL_URL = 'https://miitverse.onrender.com'
 
   try {
     assert.equal(

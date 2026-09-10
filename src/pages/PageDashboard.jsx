@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { FaArrowLeft, FaBullhorn, FaChartLine, FaImage, FaPen } from 'react-icons/fa'
+import { FaArrowLeft, FaBullhorn, FaChartLine, FaImage, FaPaperclip, FaPen } from 'react-icons/fa'
 
 import { useAuth } from '../context/useAuth'
 import { apiRequest, resolveApiUrl } from '../lib/api'
@@ -22,6 +22,12 @@ export default function PageDashboard() {
   const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [imageError, setImageError] = useState('')
+  // Page file attachment support: rides the same existing 'images' upload path
+  // as the user account system, so photos + files submit together as ONE page
+  // post through the existing POST /social/posts API.
+  const [selectedFiles, setSelectedFiles] = useState([])
+  const MAX_MEDIA = 10 // matches the existing backend maxCount for the 'images' field
+  const MAX_FILE_SIZE = 15 * 1024 * 1024 // matches the existing backend upload limit
   const [activeTab, setActiveTab] = useState('overview')
 
   useEffect(() => {
@@ -82,7 +88,7 @@ export default function PageDashboard() {
     event.preventDefault()
     const trimmed = draft.trim()
 
-    if (!trimmed && !imagePreview) {
+    if (!trimmed && !imagePreview && selectedFiles.length === 0) {
       setMessage('Write something or attach an image before publishing to the page.')
       return
     }
@@ -94,6 +100,9 @@ export default function PageDashboard() {
       formData.append('content', trimmed)
       if (imageFile) {
         formData.append('image', imageFile)
+      }
+      for (const file of selectedFiles) {
+        formData.append('images', file)
       }
       // Admins publish on behalf of this page so the post is attributed to the
       // page account (its full page name), never to the admin.
@@ -117,6 +126,7 @@ export default function PageDashboard() {
       setImageFile(null)
       setImagePreview(null)
       setImageError('')
+      setSelectedFiles([])
       setMessage('Your page update is live.')
     } catch (err) {
       setMessage(err.message || 'Failed to publish post')
@@ -154,6 +164,46 @@ export default function PageDashboard() {
     setImageFile(file)
   }
 
+  const handleFilesChange = (event) => {
+    setImageError('')
+    const files = Array.from(event.target.files || [])
+    if (files.length === 0) return
+
+    const totalSelected = selectedFiles.length + (imageFile ? 1 : 0)
+    const room = MAX_MEDIA - totalSelected
+    if (room <= 0) {
+      setImageError(`A post can contain at most ${MAX_MEDIA} photos/files in total.`)
+      return
+    }
+
+    const accepted = []
+    let oversized = 0
+    for (const file of files) {
+      if (file.size > MAX_FILE_SIZE) {
+        oversized += 1
+        continue
+      }
+      accepted.push(file)
+      if (accepted.length >= room) break
+    }
+
+    if (accepted.length > 0) {
+      setSelectedFiles((current) => [...current, ...accepted])
+    }
+
+    if (oversized > 0) {
+      setImageError(`${oversized} file(s) skipped because they exceed the 15MB size limit.`)
+    } else if (accepted.length < files.length) {
+      setImageError(`A post can contain at most ${MAX_MEDIA} photos/files in total.`)
+    } else {
+      setImageError('')
+    }
+  }
+
+  const handleRemoveFile = (index) => {
+    setSelectedFiles((current) => current.filter((_, position) => position !== index))
+  }
+
   const renderActiveTab = () => {
     if (activeTab === 'create-post') {
       return (
@@ -165,11 +215,40 @@ export default function PageDashboard() {
             <div className="page-composer-actions">
               <label className="page-image-picker" htmlFor="pageImage"><FaImage /> Add image</label>
               <input id="pageImage" type="file" accept="image/*" onChange={handleImageChange} />
+              <label className="page-image-picker" htmlFor="pageFiles"><FaPaperclip /> Add files</label>
+              <input id="pageFiles" type="file" multiple onChange={handleFilesChange} />
               <span>{draft.trim().length} characters</span>
               <button type="submit" disabled={posting}>{posting ? <><span className="button-spinner" aria-hidden="true" /> Publishing…</> : <><FaBullhorn /> Publish update</>}</button>
             </div>
             {imageError && <p className="page-message error">{imageError}</p>}
             {message && <p className={`page-message ${message === 'Your page update is live.' ? 'success' : 'error'}`}>{message}</p>}
+            {selectedFiles.length > 0 && (
+              <div className="page-image-preview">
+                {selectedFiles.map((file, index) => (
+                  <div
+                    key={`${file.name}-${index}`}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '8px',
+                      padding: '6px 10px',
+                      border: '1px solid #eee',
+                      borderRadius: '10px',
+                      marginBottom: '6px',
+                      fontSize: '14px',
+                      color: '#0B1E4F',
+                      width: '100%',
+                    }}
+                  >
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {file.type?.startsWith('image/') ? '🖼' : '📄'} {file.name}
+                    </span>
+                    <button type="button" onClick={() => handleRemoveFile(index)} aria-label={`Remove ${file.name}`}>❌</button>
+                  </div>
+                ))}
+              </div>
+            )}
             {imagePreview && <div className="page-image-preview"><img src={imagePreview} alt="Selected for your post" /><button type="button" onClick={() => { setImageFile(null); setImagePreview(null) }}>Remove image</button></div>}
           </form>
         </section>

@@ -25,5 +25,32 @@
     "verificationExpires": 1788716719990,
     "lastSentAt": 1788715819990,
     "createdAt": "2026-09-06T17:17:40.514Z"
+  },
+  "test_verification@miit.edu.mm": {
+    "username": "jfjefjfj",
+    "email": "test_verification@miit.edu.mm",
+    "passwordHash": "$2b$10$3ThEe1PVpsP5vFSEHx/XHui56Gu6phWfzPdjaEf7IjDcqeRVlQcK.",
+    "verificationCode": "54797194",
+    "verificationExpires": 1789030734376,
+    "lastSentAt": 1789029834376,
+    "createdAt": "2026-09-10T08:43:54.375Z"
+  },
+  "test_verify@miit.edu.mm": {
+    "username": "djfdjfkdjft",
+    "email": "test_verify@miit.edu.mm",
+    "passwordHash": "$2b$10$.w6deZSLghDvNmEmASd4luWSuyuBI5rdU1Sr.6Xob0bZgkFOomxpa",
+    "verificationCode": "98480239",
+    "verificationExpires": 1789031228842,
+    "lastSentAt": 1789030328842,
+    "createdAt": "2026-09-10T08:52:08.840Z"
+  },
+  "test22@miit.edu.mm": {
+    "username": "jjjkdf",
+    "email": "test22@miit.edu.mm",
+    "passwordHash": "$2b$10$EgO.yXsenG0.Yr36Zp3re.HIyg2tlo8cjSgXhQTPezpXZEDhw/WbS",
+    "verificationCode": "38554261",
+    "verificationExpires": 1789032070628,
+    "lastSentAt": 1789031170628,
+    "createdAt": "2026-09-10T09:06:10.627Z"
   }
 }

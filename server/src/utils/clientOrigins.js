@@ -1,8 +1,8 @@
-const DEFAULT_CLIENT_ORIGIN = 'https://miitverse-xi.vercel.app'
+const DEFAULT_CLIENT_ORIGIN = 'https://gdt-vercel.vercel.app'
 
 export const ALLOWED_INVITATION_HOSTS = [
-  'miitverse-xi.vercel.app',
   'gdt-vercel.vercel.app',
+  'miitversebymiit.vercel.app',
 ]
 
 function hostnameOf(value) {

@@ -154,9 +154,12 @@ export default function Feed() {
     // reference. Only a persisted server URL (post.image) is kept.
     const stripImageFile = (post) => {
       if (!post || typeof post !== "object") return post
-      const { imageFile, ...rest } = post
+      const { imageFile, imageFiles, ...rest } = post
       if (typeof rest.image === "string" && (rest.image.startsWith("blob:") || rest.image.startsWith("object-url:"))) {
         rest.image = null
+      }
+      if (Array.isArray(rest.media)) {
+        rest.media = rest.media.filter((item) => !(typeof item === "string" && item.startsWith("blob:")) && !(item && typeof item.url === "string" && item.url.startsWith("blob:")))
       }
       return rest
     }
@@ -183,13 +186,26 @@ export default function Feed() {
     try {
       let postResponse
 
-      if (newPost.imageFile) {
+      if (newPost.imageFile || (Array.isArray(newPost.imageFiles) && newPost.imageFiles.length > 0)) {
         const formData = new FormData()
         formData.append('content', newPost.content || '')
         formData.append('username', resolvedUsername || newPost.username || 'MiitVerse member')
         if (newPost.profilePicture) formData.append('profilePicture', newPost.profilePicture)
         formData.append('visibility', newPost.visibility || 'public')
-        formData.append('image', newPost.imageFile)
+
+        // Multiple-photo support: every selected file belongs to ONE post. A
+        // single file keeps the legacy 'image' field; several files are sent as
+        // 'images' entries that the server stores on the same post record.
+        const files = Array.isArray(newPost.imageFiles) && newPost.imageFiles.length > 0
+          ? newPost.imageFiles
+          : [newPost.imageFile]
+        if (files.length === 1) {
+          formData.append('image', files[0])
+        } else {
+          for (const file of files) {
+            if (file) formData.append('images', file)
+          }
+        }
 
         postResponse = await apiRequest('/social/posts', {
           method: 'POST',

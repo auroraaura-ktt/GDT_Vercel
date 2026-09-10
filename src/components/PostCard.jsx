@@ -179,7 +179,53 @@ export default function PostCard({ post = {}, onPostUpdated, onPostDeleted }) {
   // Page posts carry their full page name; fall back to the regular username.
   const authorLabel = pageName || username;
   const displayName = typeof authorLabel === "string" && authorLabel.trim() ? authorLabel.trim() : "User";
-  const imageSrc = image ? resolveApiUrl(image.replace(/^\/api(?=\/)/, "")) : null;
+
+  // Multiple-photo/media support. `media` is the list of server-stored files
+  // that belong to this one post; `image` remains the legacy single-photo field
+  // so old posts keep rendering exactly as before. Non-image attachments
+  // (documents, etc.) render as simple file chips instead of broken images.
+  const mediaEntries = Array.isArray(post.media)
+    ? post.media
+        .map((item) => {
+          const url = typeof item === "string" ? item : item?.url;
+          const type = typeof item === "object" && item ? item.type : null;
+          const name = typeof item === "object" && item ? item.name : null;
+          return typeof url === "string" && url ? { url, type: type || null, name: name || null } : null;
+        })
+        .filter(Boolean)
+    : [];
+  const isImageMedia = (entry) =>
+    entry.type ? String(entry.type).startsWith("image/") : /\.(png|jpe?g|gif|webp|svg)$/i.test(entry.url);
+  const mediaImages = mediaEntries.filter(isImageMedia);
+  const mediaFiles = mediaEntries.filter((entry) => !isImageMedia(entry));
+  const primaryImage = image || mediaImages[0]?.url || null;
+  const imageSrc = primaryImage ? resolveApiUrl(primaryImage.replace(/^\/api(?=\/)/, "")) : null;
+
+  const renderFileChip = (entry, index) => (
+    <a
+      key={`${id}-file-${index}`}
+      href={resolveApiUrl(entry.url.replace(/^\/api(?=\/)/, ""))}
+      target="_blank"
+      rel="noreferrer"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "8px",
+        margin: "6px 16px",
+        padding: "8px 12px",
+        border: "1px solid #eee",
+        borderRadius: "10px",
+        fontSize: "14px",
+        color: "#0B1E4F",
+        textDecoration: "none",
+      }}
+    >
+      <span aria-hidden="true">📄</span>
+      <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        {entry.name || entry.url.split("/").pop()}
+      </span>
+    </a>
+  );
 
   const initials = displayName
     .split(" ")
@@ -299,7 +345,65 @@ export default function PostCard({ post = {}, onPostUpdated, onPostDeleted }) {
           </p>
         </div>
 
-        {image && (
+        {mediaEntries.length > 1 && (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: mediaEntries.length === 2 ? "1fr 1fr" : "1fr 1fr",
+              gap: "2px",
+            }}
+            aria-label="Post photos"
+          >
+            {mediaEntries.map((entry, index) => (
+              isImageMedia(entry) ? (
+                <img
+                  key={`${id}-media-${index}`}
+                  src={resolveApiUrl(entry.url.replace(/^\/api(?=\/)/, ""))}
+                  alt={`post photo ${index + 1}`}
+                  style={{
+                    width: "100%",
+                    height: "180px",
+                    objectFit: "cover",
+                    display: "block",
+                  }}
+                  onError={(event) => {
+                    if (!event.currentTarget.dataset.fallbackTried) {
+                      event.currentTarget.dataset.fallbackTried = "true";
+                      event.currentTarget.src = entry.url;
+                      return;
+                    }
+                    event.currentTarget.style.display = "none";
+                  }}
+                />
+              ) : (
+                <div
+                  key={`${id}-media-${index}`}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "6px",
+                    height: "180px",
+                    padding: "12px",
+                    border: "1px solid #eee",
+                    fontSize: "14px",
+                    color: "#0B1E4F",
+                    overflow: "hidden",
+                  }}
+                >
+                  <span aria-hidden="true">📄</span>
+                  <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {entry.name || entry.url.split("/").pop()}
+                  </span>
+                </div>
+              )
+            ))}
+          </div>
+        )}
+
+        {mediaEntries.length <= 1 && mediaFiles.map((entry, index) => renderFileChip(entry, index))}
+
+        {mediaEntries.length <= 1 && primaryImage && (
           <img
             src={imageSrc}
             alt="post"

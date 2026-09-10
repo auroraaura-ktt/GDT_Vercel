@@ -238,7 +238,10 @@ router.get('/posts', authMiddleware, async (req, res) => {
   res.json({ posts: enrichedPosts, hasMore, nextCursor });
 });
 
-router.post('/posts', authMiddleware, upload.single('image'), async (req, res) => {
+router.post('/posts', authMiddleware, upload.fields([
+  { name: 'image', maxCount: 1 },   // existing single-photo clients
+  { name: 'images', maxCount: 10 }, // new multiple-photo clients
+]), async (req, res) => {
   let postUserId = req.user.id;
   let displayName = req.body?.username || req.user?.username || req.body?.user?.username || 'MiitVerse member';
   let publishedOnBehalfOfPage = null;
@@ -278,12 +281,33 @@ router.post('/posts', authMiddleware, upload.single('image'), async (req, res) =
   console.log('[POST /api/social/posts] create', {
     hasBodyText: Boolean(content),
     bodyImage: typeof req.body?.image === 'string' ? req.body.image : null,
-    hasFile: Boolean(req.file),
+    hasFile: Boolean((req.files?.image || []).length || (req.files?.images || []).length),
     fileField: req.file?.fieldname,
     fileName: req.file?.originalname,
     mimeType: req.file?.mimetype,
     fileSize: req.file?.size,
   })
+
+  // Multiple-photo support: every uploaded file for this submission belongs to
+  // ONE post. All files are stored with the existing imageStore (MongoDB on
+  // Vercel, local disk fallback in dev) and returned as usable server URLs.
+  const uploadedFiles = [...(req.files?.images || []), ...(req.files?.image || [])];
+  const mediaItems = [];
+
+  for (const file of uploadedFiles) {
+    const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'upload'}`;
+    try {
+      await storeImage(file.buffer, fileName, file.mimetype);
+      mediaItems.push({
+        url: `/api/social/uploads/${fileName}`,
+        type: file.mimetype || null,
+        name: file.originalname || null,
+      });
+    } catch (error) {
+      console.error('[POST /api/social/posts] image store failed:', error.message);
+      return res.status(503).json({ message: 'Image could not be saved. Please try again.' });
+    }
+  }
 
   if (req.file) {
     const fileName = `${Date.now()}-${req.file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'upload'}`;
@@ -296,7 +320,14 @@ router.post('/posts', authMiddleware, upload.single('image'), async (req, res) =
     }
   }
 
-  console.log('[POST /api/social/posts] stored image URL:', resolvedImageUrl)
+  // Keep the legacy single-image field working while exposing the full media
+  // list. A single uploaded photo also populates `image` so old readers (Admin,
+  // existing cards) keep rendering it unchanged.
+  if (!resolvedImageUrl && mediaItems.length > 0) {
+    resolvedImageUrl = mediaItems[0].url;
+  }
+
+  console.log('[POST /api/social/posts] stored image URL:', resolvedImageUrl, 'media count:', mediaItems.length)
 
   if (!content.trim() && !resolvedImageUrl) {
     return res.status(400).json({ message: 'Post content or an image is required' });
@@ -306,6 +337,7 @@ router.post('/posts', authMiddleware, upload.single('image'), async (req, res) =
     ...req.body,
     content,
     image: resolvedImageUrl,
+    media: mediaItems,
     userId: postUserId,
     username: displayName,
     // Persist the author type with the post. Feed reads can then render page
@@ -439,7 +471,7 @@ router.patch('/posts/:id', authMiddleware, async (req, res, next) => {
     if (!post) return res.status(403).json({ message: 'You can only edit your own posts.' })
 
     const content = String(req.body?.content ?? post.content ?? '').trim()
-    if (!content && !post.image) return res.status(400).json({ message: 'Post content or an image is required' })
+    if (!content && !post.image && !(Array.isArray(post.media) && post.media.length > 0)) return res.status(400).json({ message: 'Post content or an image is required' })
     if (content.length > 5000) return res.status(400).json({ message: 'Post content must be 5000 characters or fewer' })
 
     const updated = { ...post, ...req.body, content }

@@ -199,6 +199,7 @@ export function createSocialPost(post) {
     profilePicture: post.profilePicture || null,
     content: post.content || '',
     image: post.image || imagePath || null,
+    media: Array.isArray(post.media) ? post.media : [],
     createdAt: post.createdAt || new Date().toISOString(),
     likes: Number(post.likes || 0),
     likedBy: Array.isArray(post.likedBy) ? post.likedBy : [],

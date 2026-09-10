@@ -225,6 +225,16 @@ export default function Admin() {
     setInviteResults(null)
   }
 
+  // Copies one of the fixed MiitVerse invitation links to the clipboard.
+  const handleCopyInviteLink = async (url) => {
+    try {
+      await navigator.clipboard.writeText(url)
+      setInviteMessage({ type: 'success', text: `Copied invitation link: ${url}` })
+    } catch {
+      setInviteMessage({ type: 'error', text: `Could not copy the link. Please copy it manually: ${url}` })
+    }
+  }
+
   const handleSendInvitations = async (e) => {
     e.preventDefault()
     setInviteMessage({ type: '', text: '' })
@@ -1176,9 +1186,23 @@ export default function Admin() {
 
             <div className="admin-invite-link">
               <strong>Invitation links:</strong>
-              <a href="https://miitverse-xi.vercel.app/register" target="_blank" rel="noreferrer">https://miitverse-xi.vercel.app</a>
+              <a href="https://gdt-vercel.vercel.app" target="_blank" rel="noreferrer">https://gdt-vercel.vercel.app</a>
+              <button
+                type="button"
+                className="admin-users-refresh"
+                onClick={() => handleCopyInviteLink('https://gdt-vercel.vercel.app')}
+              >
+                Copy link
+              </button>
               <span aria-hidden="true">·</span>
-              <a href="https://gdt-vercel.vercel.app/register" target="_blank" rel="noreferrer">https://gdt-vercel.vercel.app</a>
+              <a href="https://miitversebymiit.vercel.app" target="_blank" rel="noreferrer">https://miitversebymiit.vercel.app</a>
+              <button
+                type="button"
+                className="admin-users-refresh"
+                onClick={() => handleCopyInviteLink('https://miitversebymiit.vercel.app')}
+              >
+                Copy link
+              </button>
             </div>
 
             {inviteMessage.text && (
