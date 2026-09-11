@@ -117,6 +117,21 @@
   backdrop-filter: blur(8px);
 }
 
+/* Edit Post modal: reuses the existing reaction-modal shell so colors,
+   fonts, spacing and responsive behavior stay identical to the app design. */
+.edit-post-modal {
+  overflow-y: auto;
+}
+
+.edit-post-section-label {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: #50617e;
+}
+
 .reaction-modal {
   width: min(100%, 560px);
   max-height: min(760px, 92vh);
@@ -184,4 +199,180 @@
 @media (max-width: 600px) {
   .reaction-modal-overlay { padding: 0; align-items: end; }
   .reaction-modal { max-height: 90vh; border-radius: 24px 24px 0 0; }
+}
+
+/* ---- Photo lightbox / viewer ---- */
+.photo-lightbox-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: grid;
+  place-items: center;
+  background: rgba(4, 12, 32, 0.9);
+  backdrop-filter: blur(4px);
+  padding: 24px;
+}
+
+.photo-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  z-index: 2;
+  width: 42px;
+  height: 42px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.photo-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+
+.photo-lightbox-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 2;
+  width: 48px;
+  height: 48px;
+  border: none;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+  font-size: 30px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.photo-lightbox-nav:hover {
+  background: rgba(255, 255, 255, 0.32);
+}
+.photo-lightbox-prev { left: 16px; }
+.photo-lightbox-next { right: 16px; }
+
+.photo-lightbox-stage {
+  margin: 0;
+  max-width: 92vw;
+  max-height: 86vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.photo-lightbox-img {
+  max-width: 92vw;
+  max-height: 86vh;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+}
+
+.photo-lightbox-counter {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  color: #fff;
+  font-size: 14px;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 5px 14px;
+  border-radius: 20px;
+}
+
+/* -- File attachment tiles (secure downloads) -- */
+.post-file-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 16px;
+  padding: 10px 12px;
+  border: 1px solid #EEF3FF;
+  border-radius: 12px;
+  font-size: 14px;
+  color: #0B1E4F;
+}
+.post-file-chip-icon { font-size: 18px; flex: 0 0 auto; }
+.post-file-chip-body { flex: 1 1 auto; min-width: 0; }
+.post-file-chip-name {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.post-file-chip-meta {
+  font-size: 12px;
+  color: #4B5D7A;
+}
+.post-file-download-btn {
+  flex: 0 0 auto;
+  border: none;
+  background: #FFF3D7;
+  color: #0B1E4F;
+  border-radius: 50%;
+  width: 34px;
+  height: 34px;
+  cursor: pointer;
+  font-size: 15px;
+  display: grid;
+  place-items: center;
+  transition: background 0.2s ease;
+}
+.post-file-download-btn:hover { background: #FFE3A8; }
+.post-file-download-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.post-media-file {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 180px;
+  padding: 12px;
+  border: 1px solid #EEF3FF;
+  background: #FBFCFE;
+  color: #0B1E4F;
+  overflow: hidden;
+  cursor: pointer;
+}
+.post-media-file-icon { font-size: 30px; }
+.post-media-file-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  font-weight: 600;
+}
+.post-media-file-meta { font-size: 11px; color: #4B5D7A; }
+.post-media-file-btn {
+  border: none;
+  background: #FFF3D7;
+  color: #0B1E4F;
+  border-radius: 10px;
+  padding: 5px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.post-media-file-btn:hover { background: #FFE3A8; }
+
+.feed-layout.dark .post-file-chip,
+.feed-layout.dark .post-file-chip-meta,
+.feed-layout.dark .post-media-file {
+  color: #F7F9FC;
+}
+.feed-layout.dark .post-media-file {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
 }

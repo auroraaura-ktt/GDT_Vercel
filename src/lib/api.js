@@ -79,3 +79,62 @@ export async function apiRequest(path, options = {}) {
 
   return data
 }
+
+/**
+ * Download a protected attachment using the signed-in session's bearer token.
+ * Because browser `<a>`/`<img>` requests cannot attach an Authorization header,
+ * the file is fetched here, converted to a blob, and saved via a temporary
+ * object URL so protected files are only ever delivered through the
+ * authenticated /api/social/download/:fileName endpoint.
+ */
+export async function downloadProtectedFile(path, { name, onProgress } = {}) {
+  const authToken = getStoredAuthToken()
+
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 30000)
+
+  let response
+  try {
+    const headers = new Headers({ Accept: 'application/octet-stream' })
+    if (authToken) headers.set('Authorization', `Bearer ${authToken}`)
+    response = await fetch(resolveApiUrl(path), {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+      credentials: 'same-origin',
+    })
+  } catch (error) {
+    clearTimeout(timeoutId)
+    if (error.name === 'AbortError') {
+      const timeoutError = new Error('Download timed out. Please try again.')
+      timeoutError.status = 408
+      throw timeoutError
+    }
+    throw error
+  }
+
+  if (!response.ok) {
+    clearTimeout(timeoutId)
+    const body = await response.json().catch(() => ({}))
+    const err = new Error(body.message || `Download failed (${response.status})`)
+    err.status = response.status
+    throw err
+  }
+
+  const blob = await response.blob()
+  clearTimeout(timeoutId)
+
+  const fallbackName = name || (typeof path === 'string' ? path.split('/').pop() || 'file' : 'file')
+  const objectUrl = URL.createObjectURL(blob)
+  const anchor = document.createElement('a')
+  anchor.href = objectUrl
+  anchor.download = fallbackName || 'file'
+  anchor.style.display = 'none'
+  document.body.appendChild(anchor)
+  anchor.click()
+  anchor.remove()
+  window.setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+
+  onProgress?.()
+  return true
+}

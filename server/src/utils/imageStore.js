@@ -206,3 +206,48 @@ export async function serveImageFromStorage(req, res) {
   res.set('Cache-Control', 'public, max-age=31536000, immutable')
   res.send(fileBuffer)
 }
+
+/**
+ * Load a stored file (image or attachment) by its sanitized storage key.
+ *
+ * Returns `null` when the file does not exist, otherwise
+ * `{ data, contentType, originalName }`. The fileName is sanitized against
+ * path traversal before any filesystem or database access, so callers can
+ * safely use it for feature authorization and downloads.
+ */
+export async function getStoredFile(fileName) {
+  const safeName = sanitizeFileName(fileName)
+  if (!safeName) {
+    return null
+  }
+
+  // 1. Prefer MongoDB (persistent, shared store on Vercel).
+  const mongoReady = await ensureMongoForImages()
+  if (mongoReady) {
+    try {
+      const doc = await ImageModel.findOne({ imageId: safeName }).lean()
+      const data = extractBuffer(doc)
+      if (data && data.length > 0) {
+        return {
+          data,
+          contentType: doc?.contentType || inferContentType(safeName),
+          originalName: doc?.originalName || safeName,
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to read file from MongoDB, trying local disk:', error.message)
+    }
+  }
+
+  // 2. Fallback: local filesystem (local development / degraded mode).
+  const filePath = resolve(localUploadDir, safeName)
+  if (!existsSync(filePath)) {
+    return null
+  }
+  const data = readFileSync(filePath)
+  return {
+    data,
+    contentType: inferContentType(safeName),
+    originalName: safeName,
+  }
+}

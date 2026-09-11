@@ -21,7 +21,7 @@ import { listPageRecords } from '../utils/pagePersistence.js';
 import { deleteSocialPostFromDatabases, listSocialPostsFromMongo, persistSocialPost } from '../utils/socialPersistence.js';
 import { getUserFromMongo, listVerifiedUserIds } from '../utils/userPersistence.js';
 import { createReport, deleteReportById, listReports, updateReportById } from '../utils/reportStore.js';
-import { storeImage, serveImageFromStorage } from '../utils/imageStore.js';
+import { storeImage, getStoredFile, inferContentType } from '../utils/imageStore.js';
 
 const router = Router();
 // Persistent image storage now lives in MongoDB (see imageStore.js). A 15 MB
@@ -107,8 +107,81 @@ router.post('/uploads', authMiddleware, upload.single('image'), async (req, res)
   res.json({ imageUrl });
 });
 
+// Public inline media endpoint for images only. This lets feed `<img>` tags
+// render post photos/avatars without sending a JWT. Any non-image attachment
+// is refused here — it must be downloaded through the authenticated
+// /download/:fileName endpoint so protected files are never reachable simply
+// by knowing their storage URL.
 router.get('/uploads/:fileName', async (req, res) => {
-  await serveImageFromStorage(req, res);
+  const stored = await getStoredFile(req.params.fileName)
+  if (!stored) {
+    return res.status(404).json({ message: 'File not found' })
+  }
+  const contentType = stored.contentType || ''
+  const isInlineImage =
+    contentType.startsWith('image/') ||
+    /\\.(png|jpe?g|gif|webp|bmp|svg|avif|webp)$/i.test(String(req.params.fileName || ''))
+  if (!isInlineImage) {
+    return res.status(403).json({ message: 'This file requires an authenticated download request.' })
+  }
+
+  res.set('Content-Type', contentType)
+  res.set('Cache-Control', 'public, max-age=31536000, immutable')
+  return res.send(stored.data)
+});
+
+// True when the signed-in user is allowed to see (and therefore download files
+// from) the request. We resolve rendered file names to the posts that own them
+// using the same visibility rules as the feed, so changing a post id, file id,
+// or filename cannot bypass the check.
+async function canUserAccessFile(user, fileName) {
+  if (!user?.id || !fileName) return false
+
+  const normalizedFileName = String(fileName)
+  const following = getSocialFollows(user.id)
+  const posts = await listSocialPostsFromMongo({ suspended: { $ne: true } })
+  const visiblePosts = getVisiblePosts(posts, user.id, following)
+
+  const referencesFile = (post) => {
+    const media = Array.isArray(post?.media) ? post.media : []
+    return media.some((item) => {
+      const url = typeof item === 'string' ? item : item?.url
+      return typeof url === 'string' && String(url.split('/').pop() || '') === normalizedFileName
+    })
+  }
+
+  return visiblePosts.some(referencesFile)
+}
+
+// Secure, authenticated file download with enforced authorization. Unauthorized
+// requests (no/invalid token -> 401, not allowed to view the source post -> 403)
+// never receive the file bytes. The storage key is sanitized to prevent path
+// traversal and no server filesystem path is ever revealed.
+router.get('/download/:fileName', authMiddleware, async (req, res, next) => {
+  try {
+    const fileName = String(req.params.fileName || '').split('/').pop()
+    const allowed = await canUserAccessFile(req.user, fileName)
+    if (!allowed) {
+      return res.status(403).json({ message: 'You are not allowed to download this file.' })
+    }
+
+    const stored = await getStoredFile(fileName)
+    if (!stored) {
+      return res.status(404).json({ message: 'File not found' })
+    }
+
+    const suggestedName =
+      typeof req.query?.name === 'string' && req.query.name.trim()
+        ? req.query.name.trim().replace(/["\\\r\n]/g, '').slice(0, 200)
+        : stored.originalName || fileName
+
+    res.setHeader('Content-Type', stored.contentType || 'application/octet-stream')
+    res.setHeader('Content-Length', String(stored.data?.length || 0))
+    res.setHeader('Content-Disposition', `attachment; filename="${suggestedName}"`)
+    return res.send(stored.data)
+  } catch (error) {
+    return next(error)
+  }
 });
 
 router.get('/verified-authors', authMiddleware, async (req, res) => {
@@ -302,6 +375,7 @@ router.post('/posts', authMiddleware, upload.fields([
         url: `/api/social/uploads/${fileName}`,
         type: file.mimetype || null,
         name: file.originalname || null,
+        size: Number(file.size) || null,
       });
     } catch (error) {
       console.error('[POST /api/social/posts] image store failed:', error.message);
@@ -465,18 +539,106 @@ async function findOwnedPost(req, postId) {
   return null
 }
 
-router.patch('/posts/:id', authMiddleware, async (req, res, next) => {
+function normalizeMediaEntry(item) {
+  const url = typeof item === 'string' ? item : item?.url
+  if (typeof url !== 'string' || !url.trim()) return null
+  return {
+    url,
+    type: (typeof item === 'object' && item && item.type) || null,
+    name: (typeof item === 'object' && item && item.name) || null,
+    size: (typeof item === 'object' && item && item.size) ? Number(item.size) : null,
+  }
+}
+
+function mediaStorageToken(url) {
+  return String(url || '').split('/').filter(Boolean).pop() || ''
+}
+
+function isImageLike(url, type) {
+  if (typeof type === 'string' && type.startsWith('image/')) return true
+  return /\.(png|jpe?g|gif|webp|bmp|svg|avif)$/i.test(String(url || ''))
+}
+
+// Edit a post's text and/or media. Authorization is enforced via findOwnedPost
+// (owner, admin, or page owner — otherwise 403). Users can KEEP, REMOVE, and
+// ADD existing/new images and files independently, but removal is matched
+// strictly against THIS post's own stored media entries, so supplying another
+// post's media id or an arbitrary file name can never delete unrelated media.
+router.patch('/posts/:id', authMiddleware, upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'images', maxCount: 10 },
+]), async (req, res, next) => {
   try {
     const post = await findOwnedPost(req, req.params.id)
     if (!post) return res.status(403).json({ message: 'You can only edit your own posts.' })
 
     const content = String(req.body?.content ?? post.content ?? '').trim()
-    if (!content && !post.image && !(Array.isArray(post.media) && post.media.length > 0)) return res.status(400).json({ message: 'Post content or an image is required' })
     if (content.length > 5000) return res.status(400).json({ message: 'Post content must be 5000 characters or fewer' })
 
-    const updated = { ...post, ...req.body, content }
+    // User-chosen media to drop. Sent as a JSON array (application/json body)
+    // or a JSON-encoded string (multipart body). Validated against this post
+    // below — unmatched entries are simply ignored.
+    let removeMedia = []
+    const rawRemove = req.body?.removeMedia
+    if (Array.isArray(rawRemove)) {
+      removeMedia = rawRemove
+    } else if (typeof rawRemove === 'string' && rawRemove.trim()) {
+      try { removeMedia = JSON.parse(rawRemove) } catch { removeMedia = [] }
+    }
+
+    // New uploads ride the same existing upload path used for creation. Both
+    // photos and ordinary files are stored through imageStore (MongoDB on
+    // Render/Vercel, local disk fallback in dev).
+    const uploadedFiles = [...(req.files?.images || []), ...(req.files?.image || [])]
+    const newMedia = []
+    for (const file of uploadedFiles) {
+      const fileName = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}-${file.originalname?.replace(/[^a-zA-Z0-9.-]/g, '_') || 'upload'}`
+      try {
+        await storeImage(file.buffer, fileName, file.mimetype)
+        newMedia.push({
+          url: `/api/social/uploads/${fileName}`,
+          type: file.mimetype || null,
+          name: file.originalname || null,
+          size: Number(file.size) || null,
+        })
+      } catch (error) {
+        console.error('[PATCH /api/social/posts] media store failed:', error.message)
+        return res.status(503).json({ message: 'Media could not be saved. Please try again.' })
+      }
+    }
+
+    // Rebuild this post's media list from its own existing entries. A legacy
+    // single `image` value (old posts) is folded in so it too can be kept or
+    // removed, keeping old posts backward compatible.
+    const existingMedia = (Array.isArray(post.media) ? post.media : []).map(normalizeMediaEntry).filter(Boolean)
+    const hasLegacyImage = typeof post.image === 'string' && post.image && !existingMedia.some((entry) => entry.url === post.image)
+    if (hasLegacyImage) {
+      existingMedia.unshift({
+        url: post.image,
+        type: inferContentType(post.image.split('/').filter(Boolean).pop() || ''),
+        name: null,
+        size: null,
+      })
+    }
+
+    const removeTokens = new Set(removeMedia.map(mediaStorageToken).filter(Boolean))
+    const keptMedia = existingMedia.filter((entry) => !removeTokens.has(mediaStorageToken(entry.url)))
+    const media = [...keptMedia, ...newMedia]
+
+    const firstImage = media.find((entry) => isImageLike(entry.url, entry.type))
+    const image = firstImage ? firstImage.url : (media.length > 0 ? media[0].url : null)
+
+    if (!content && !image && media.length === 0) {
+      return res.status(400).json({ message: 'Post content or media is required' })
+    }
+
+    // Build the updated post explicitly from the persisted record so editing
+    // text/media never overwrites author, timestamps, reactions, comments,
+    // verification-related or moderation fields.
+    const updated = { ...post, content, image, media }
+
     await persistSocialPost(updated)
-    updateSocialPostById(post.id, { content })
+    updateSocialPostById(post.id, { content, image, media })
     return res.json({ post: updated })
   } catch (error) {
     return next(error)
