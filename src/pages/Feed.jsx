@@ -22,6 +22,11 @@ export default function Feed() {
   const [hasMorePosts, setHasMorePosts] = useState(true)
   const [feedError, setFeedError] = useState("")
   const [activeFeed, setActiveFeed] = useState("current")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [searchScope, setSearchScope] = useState("all")
+  const [dateRange, setDateRange] = useState("all")
+  const [customStartDate, setCustomStartDate] = useState("")
+  const [customEndDate, setCustomEndDate] = useState("")
   const followingRef = useRef([])
   const loadMoreRef = useRef(null)
   const cursorRef = useRef(null)
@@ -299,6 +304,76 @@ export default function Feed() {
 
   const feedPosts = activeFeed === 'page' ? pagePosts : userPosts
 
+  const filteredFeedPosts = useMemo(() => {
+    let nextPosts = [...feedPosts]
+    const normalizedSearch = searchTerm.trim().toLowerCase()
+
+    if (normalizedSearch) {
+      nextPosts = nextPosts.filter((post) => {
+        const authorNames = [
+          post?.username,
+          post?.author,
+          post?.pageName,
+          post?.user?.username,
+        ]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase()
+        const contentText = String(post?.content ?? '').toLowerCase()
+
+        if (searchScope === 'people') {
+          return authorNames.includes(normalizedSearch)
+        }
+
+        if (searchScope === 'contents') {
+          return contentText.includes(normalizedSearch)
+        }
+
+        if (searchScope === 'date') {
+          return true
+        }
+
+        return authorNames.includes(normalizedSearch) || contentText.includes(normalizedSearch)
+      })
+    }
+
+    if (dateRange === 'custom') {
+      const startTimestamp = customStartDate ? new Date(`${customStartDate}T00:00:00`).getTime() : null
+      const endTimestamp = customEndDate ? new Date(`${customEndDate}T23:59:59.999`).getTime() : null
+
+      if (startTimestamp || endTimestamp) {
+        nextPosts = nextPosts.filter((post) => {
+          const rawDate = post?.createdAt || post?.timestamp
+          if (!rawDate) return false
+          const postTime = new Date(rawDate).getTime()
+          if (Number.isNaN(postTime)) return false
+          if (startTimestamp && postTime < startTimestamp) return false
+          if (endTimestamp && postTime > endTimestamp) return false
+          return true
+        })
+      }
+    } else if (dateRange !== 'all') {
+      const daysLookup = {
+        today: 1,
+        '7days': 7,
+        '30days': 30,
+      }
+      const windowDays = daysLookup[dateRange] ?? null
+      if (windowDays) {
+        const cutoff = Date.now() - (windowDays * 24 * 60 * 60 * 1000)
+        nextPosts = nextPosts.filter((post) => {
+          const rawDate = post?.createdAt || post?.timestamp
+          if (!rawDate) return false
+          const postTime = new Date(rawDate).getTime()
+          if (Number.isNaN(postTime)) return false
+          return postTime >= cutoff
+        })
+      }
+    }
+
+    return nextPosts
+  }, [feedPosts, searchTerm, searchScope, dateRange, customStartDate, customEndDate])
+
   useEffect(() => {
     const sentinel = loadMoreRef.current
     if (!sentinel) return undefined
@@ -370,8 +445,92 @@ export default function Feed() {
           </button>
         </div>
 
+        <div className="feed-search-shell" aria-label="Feed search and filters">
+          <div className="feed-search-box">
+            <span className="feed-search-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <circle cx="11" cy="11" r="6" />
+                <path d="M16 16l5 5" />
+              </svg>
+            </span>
+
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search posts, people, or content…"
+              aria-label="Search posts, people, or content"
+            />
+
+            {searchTerm && (
+              <button
+                type="button"
+                className="feed-clear-search"
+                onClick={() => setSearchTerm("")}
+                aria-label="Clear search"
+              >
+                ×
+              </button>
+            )}
+          </div>
+
+          <div className="feed-filter-row">
+            <div className="feed-filter-group" role="group" aria-label="Search filter scope">
+              {['all', 'people', 'date', 'contents'].map((scope) => (
+                <button
+                  key={scope}
+                  type="button"
+                  className={`feed-filter-btn ${searchScope === scope ? 'active' : ''}`}
+                  onClick={() => setSearchScope(scope)}
+                >
+                  {scope === 'all' ? 'All' : scope === 'people' ? 'People' : scope === 'date' ? 'Date' : 'Contents'}
+                </button>
+              ))}
+            </div>
+
+            <div className="feed-date-range" role="group" aria-label="Date range filter">
+              {[
+                { label: 'Today', value: 'today' },
+                { label: 'Last 7 Days', value: '7days' },
+                { label: 'Last 30 Days', value: '30days' },
+                { label: 'Custom', value: 'custom' },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  className={`feed-date-btn ${dateRange === option.value ? 'active' : ''}`}
+                  onClick={() => setDateRange(option.value)}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {dateRange === 'custom' && (
+            <div className="feed-custom-range">
+              <label>
+                <span>From</span>
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(event) => setCustomStartDate(event.target.value)}
+                />
+              </label>
+              <label>
+                <span>To</span>
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(event) => setCustomEndDate(event.target.value)}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+
         <PostList
-          posts={feedPosts}
+          posts={filteredFeedPosts}
           isLoading={isLoading}
           onPostUpdated={handlePostUpdated}
           onPostDeleted={handlePostDeleted}
