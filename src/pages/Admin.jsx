@@ -49,10 +49,14 @@ export default function Admin() {
   const [testPostMessage, setTestPostMessage] = useState({ type: '', text: '' })
   const [postsList, setPostsList] = useState([])
   const [loadingPosts, setLoadingPosts] = useState(false)
+  const [postsLoadError, setPostsLoadError] = useState('')
   const [postsFilter, setPostsFilter] = useState('all') // all | user | page | suspended
   const [reportRows, setReportRows] = useState([])
   const [loadingReports, setLoadingReports] = useState(false)
   const [expandedReportId, setExpandedReportId] = useState(null)
+  const [selectedPost, setSelectedPost] = useState(null)
+  const [editingPostId, setEditingPostId] = useState(null)
+  const [editingPostContent, setEditingPostContent] = useState('')
 
   const [feedbackRows, setFeedbackRows] = useState([])
   const [loadingFeedback, setLoadingFeedback] = useState(false)
@@ -572,6 +576,22 @@ export default function Admin() {
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
+  const openPostDetails = (postItem) => {
+    if (!postItem) return
+    setSelectedPost(postItem)
+    setEditingPostId(null)
+    setEditingPostContent('')
+    setActiveSection('post-details')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  const returnToPosts = () => {
+    setEditingPostId(null)
+    setEditingPostContent('')
+    setActiveSection('posts')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const requestUserSuspension = () => {
     if (!selectedUser || selectedUser.id === user?.id) return
     setUserConfirmation({
@@ -609,13 +629,14 @@ export default function Admin() {
 
   async function loadAllPosts() {
     setLoadingPosts(true)
+    setPostsLoadError('')
     try {
       // fetch all posts from server (admin-only)
       const data = await apiRequest('/social/posts/all', {
         headers: { Authorization: `Bearer ${token}` },
       })
 
-      const posts = (data.posts || []).map((p) => {
+      const posts = (Array.isArray(data.posts) ? data.posts : []).filter(Boolean).map((p) => {
         const authorType = p.authorType || (p.source === 'page' || p.postType === 'page' ? 'page' : 'user')
         return {
           ...p,
@@ -629,6 +650,7 @@ export default function Admin() {
       setPostsList(posts)
     } catch (err) {
       setPostsList([])
+      setPostsLoadError('Unable to load posts. Please refresh or try again later.')
     } finally {
       setLoadingPosts(false)
     }
@@ -643,6 +665,8 @@ export default function Admin() {
           method: 'DELETE',
           headers: { Authorization: `Bearer ${token}` },
         })
+        setSelectedPost(null)
+        setActiveSection('posts')
         await loadAllPosts()
       } catch (err) {
         setError(err.message || 'Failed to delete post')
@@ -650,8 +674,70 @@ export default function Admin() {
     })()
   }
 
+  const handleDeleteComment = async (commentId) => {
+    if (!selectedPost || !commentId) return
+    if (!window.confirm('Delete this comment?')) return
+
+    try {
+      const response = await apiRequest(`/social/posts/${encodeURIComponent(selectedPost.id)}/comments/${encodeURIComponent(commentId)}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      const updatedPost = response.post || {
+        ...selectedPost,
+        comments: (Array.isArray(selectedPost.comments) ? selectedPost.comments : []).filter((comment) => String(comment?.id) !== String(commentId)),
+      }
+      setSelectedPost(updatedPost)
+      setPostsList((current) => current.map((post) => String(post.id) === String(updatedPost.id) ? updatedPost : post))
+    } catch (err) {
+      setError(err.message || 'Failed to delete comment')
+    }
+  }
+
+  const handleEditPost = (post) => {
+    if (!post) return
+    setEditingPostId(post.id)
+    setEditingPostContent(post.content || '')
+  }
+
+  const saveEditedPost = async () => {
+    if (!selectedPost || !editingPostId) return
+
+    const content = editingPostContent.trim()
+    if (!content && (!Array.isArray(selectedPost.media) || selectedPost.media.length === 0) && !selectedPost.image) {
+      setError('Post content or media is required.')
+      return
+    }
+
+    try {
+      const data = await apiRequest(`/social/posts/${encodeURIComponent(selectedPost.id)}`, {
+        method: 'PATCH',
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ content }),
+      })
+
+      const updatedPost = data.post || { ...selectedPost, content }
+      setSelectedPost(updatedPost)
+      setPostsList((current) => current.map((post) => String(post.id) === String(updatedPost.id) ? { ...post, ...updatedPost } : post))
+      setEditingPostId(null)
+      setEditingPostContent('')
+      setError(null)
+    } catch (err) {
+      setError(err.message || 'Failed to edit post')
+    }
+  }
+
   const handleToggleSuspend = (post) => {
+    if (!post) return
     const toggle = !post.suspended
+    const confirmMessage = toggle
+      ? 'Suspend this post? This keeps the post record intact but hides it from normal active use.'
+      : 'Unsuspend this post? This restores the post to the active feed state.'
+
+    if (!window.confirm(confirmMessage)) return
 
     ;(async () => {
       try {
@@ -660,6 +746,9 @@ export default function Admin() {
           headers: { Authorization: `Bearer ${token}` },
           body: JSON.stringify({ suspended: toggle }),
         })
+        setSelectedPost((current) => current && String(current.id) === String(post.id)
+          ? { ...current, suspended: toggle }
+          : current)
         await loadAllPosts()
       } catch (err) {
         setError(err.message || 'Failed to update post')
@@ -667,9 +756,127 @@ export default function Admin() {
     })()
   }
 
+  const getPostPhotoCount = (post) => {
+    return getPostImages(post).length
+  }
+
+  const getPostFileCount = (post) => {
+    const mediaEntries = Array.isArray(post?.media) ? post.media : []
+    if (mediaEntries.length === 0) return 0
+
+    return mediaEntries.filter((item) => {
+      const type = typeof item === 'string' ? '' : item?.type || ''
+      const url = typeof item === 'string' ? item : item?.url || ''
+      return !(type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif)$/i.test(url))
+    }).length
+  }
+
+  const getPostCommentCount = (post) => {
+    if (Array.isArray(post?.comments)) return post.comments.length
+    return Number(post?.comments || 0)
+  }
+
+  const getPostReactionCount = (post) => {
+    const likes = Number(post?.likes || 0)
+    const likedByCount = Array.isArray(post?.likedBy) ? post.likedBy.length : 0
+    return Math.max(likes, likedByCount)
+  }
+
+  const getPostMediaEntries = (post) => {
+    const entries = Array.isArray(post?.media) ? post.media : []
+    const normalized = entries
+      .map((entry) => {
+        if (typeof entry === 'string') {
+          return { url: entry, type: 'string', name: entry.split('/').filter(Boolean).pop() || 'attachment' }
+        }
+        if (!entry || typeof entry !== 'object') return null
+        return {
+          url: entry.url || '',
+          type: entry.type || '',
+          name: entry.name || (entry.url ? entry.url.split('/').filter(Boolean).pop() : 'attachment'),
+          size: entry.size || null,
+        }
+      })
+      .filter((entry) => entry && entry.url)
+
+    if (typeof post?.image === 'string' && post.image.trim() && !normalized.some((entry) => entry.url === post.image)) {
+      normalized.unshift({
+        url: post.image,
+        type: 'image',
+        name: post.image.split('/').filter(Boolean).pop() || 'image',
+        size: null,
+      })
+    }
+
+    return normalized
+  }
+
+  const getPostImages = (post) => {
+    const entries = getPostMediaEntries(post)
+    return entries.filter((entry) => {
+      const type = String(entry.type || '').toLowerCase()
+      const lowerUrl = String(entry.url || '').toLowerCase()
+      return type.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif)$/i.test(lowerUrl)
+    })
+  }
+
+  const getPostFiles = (post) => {
+    const entries = getPostMediaEntries(post)
+    return entries.filter((entry) => {
+      const type = String(entry.type || '').toLowerCase()
+      const lowerUrl = String(entry.url || '').toLowerCase()
+      return !type.startsWith('image/') && !/\.(png|jpe?g|gif|webp|svg|bmp|avif|heic|heif)$/i.test(lowerUrl)
+    })
+  }
+
+  const getPostComments = (post) => {
+    if (!Array.isArray(post?.comments)) return []
+    return post.comments
+      .filter((entry) => entry && typeof entry === 'object')
+      .map((entry) => ({
+        id: entry.id || null,
+        username: entry.username || entry.author || 'Unknown user',
+        userId: entry.userId || entry.authorId || null,
+        content: entry.content || 'No comment content available.',
+        createdAt: entry.createdAt || null,
+        replies: Array.isArray(entry.replies) ? entry.replies.length : 0,
+      }))
+  }
+
+  const getSelectedPostReports = (postId) => {
+    if (!postId) return []
+    return reportRows.filter((report) => String(report?.postId) === String(postId))
+  }
+
+  const getPostReportCount = (postId) => {
+    if (!postId) return 'Unavailable'
+    const count = reportRows.filter((report) => String(report?.postId) === String(postId)).length
+    return count
+  }
+
   const newestUsers = users.slice(0, 6)
   const regularUsers = users.filter((userItem) => userItem.role !== 'admin')
   const adminUsers = users.filter((userItem) => userItem.role === 'admin')
+
+  useEffect(() => {
+    if (!selectedPost) return
+
+    const latestPost = postsList.find((post) => String(post.id) === String(selectedPost.id))
+    if (!latestPost) {
+      setSelectedPost(null)
+      return
+    }
+
+    setSelectedPost((current) => {
+      if (!current || String(current.id) !== String(latestPost.id)) {
+        return latestPost
+      }
+
+      const currentSignature = `${current.content}|${current.suspended}|${current.visibility}|${current.updatedAt || ''}|${current.createdAt || ''}`
+      const latestSignature = `${latestPost.content}|${latestPost.suspended}|${latestPost.visibility}|${latestPost.updatedAt || ''}|${latestPost.createdAt || ''}`
+      return currentSignature === latestSignature ? current : latestPost
+    })
+  }, [postsList, selectedPost?.id])
 
   useEffect(() => {
     if (activeSection === 'users') {
@@ -684,6 +891,7 @@ export default function Admin() {
     }
     if (activeSection === 'posts') {
       loadAllPosts()
+      loadReports()
     }
     if (activeSection === 'reports') {
       loadReports()
@@ -715,6 +923,7 @@ export default function Admin() {
     users: 'Manage Users',
     'page-accounts': 'Page Accounts',
     posts: 'Posts',
+    'post-details': 'Post Details',
     invitations: 'Invitations',
     reports: 'Reports',
     feedback: 'User Feedback',
@@ -727,6 +936,7 @@ export default function Admin() {
     users: 'Create and manage personal accounts from here.',
     'page-accounts': 'Create special MIIT page accounts without email verification.',
     posts: 'Manage posts and content moderation.',
+    'post-details': 'Review the selected post, its media, comments, reports, and admin actions.',
     invitations: 'Invite users via email and send a registration link.',
     reports: 'Review flagged reports and moderation tasks.',
     feedback: 'Review star ratings and feedback submitted by users.',
@@ -750,6 +960,9 @@ export default function Admin() {
   const dashboardChartPoints = dashboardMetrics
     .map((metric, index) => `${34 + index * 84},${128 - (metric.value / dashboardChartMax) * 92}`)
     .join(' ')
+  const resolvedSelectedPost = selectedPost
+    ? postsList.find((post) => String(post.id) === String(selectedPost.id)) || selectedPost
+    : null
 
   const renderContent = () => {
     switch (activeSection) {
@@ -1116,6 +1329,164 @@ export default function Admin() {
             </div>
           </section>
         )
+      case 'post-details':
+        return (
+          <section id="post-details" className="admin-page-accounts">
+            <div className="admin-post-details-card admin-post-details-page">
+              <div className="admin-post-details-header">
+                <div>
+                  <button type="button" className="admin-more-actions-btn admin-back-button" onClick={returnToPosts}>← Back to Posts</button>
+                  <p className="admin-eyebrow">POST DETAILS</p>
+                  <h3>{resolvedSelectedPost?.author || 'Post detail'}</h3>
+                </div>
+              </div>
+
+              {!resolvedSelectedPost && (
+                <div className="admin-post-detail-empty-state">
+                  <p>No post selected.</p>
+                  <button type="button" className="admin-more-actions-btn" onClick={returnToPosts}>Return to posts</button>
+                </div>
+              )}
+
+              {resolvedSelectedPost && (
+                <>
+                  {error && <p className="error-text">{error}</p>}
+
+                  <div className="admin-post-details-grid">
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">OVERVIEW</p>
+                      <dl className="admin-post-detail-list">
+                        <div><dt>Author</dt><dd>{resolvedSelectedPost.author || 'Unavailable'}</dd></div>
+                        <div><dt>Author type</dt><dd>{resolvedSelectedPost.authorType || 'user'}</dd></div>
+                        <div><dt>Post ID</dt><dd className="admin-user-id">{resolvedSelectedPost.id}</dd></div>
+                        <div><dt>Created</dt><dd>{resolvedSelectedPost.createdAt ? new Date(resolvedSelectedPost.createdAt).toLocaleString() : 'Not available'}</dd></div>
+                        <div><dt>Updated</dt><dd>{resolvedSelectedPost.updatedAt ? new Date(resolvedSelectedPost.updatedAt).toLocaleString() : 'Not available'}</dd></div>
+                        <div><dt>Status</dt><dd>{resolvedSelectedPost.suspended ? 'Suspended' : 'Active'}</dd></div>
+                        <div><dt>Visibility</dt><dd>{resolvedSelectedPost.visibility || 'public'}</dd></div>
+                      </dl>
+                      {editingPostId === resolvedSelectedPost.id ? (
+                        <div className="admin-post-edit-wrap">
+                          <textarea
+                            value={editingPostContent}
+                            onChange={(event) => setEditingPostContent(event.target.value)}
+                            rows={6}
+                          />
+                          <div className="admin-post-detail-actions">
+                            <button type="button" className="admin-more-actions-btn" onClick={() => setEditingPostId(null)}>Cancel</button>
+                            <button type="button" className="admin-reset-btn" onClick={saveEditedPost}>Save changes</button>
+                          </div>
+                        </div>
+                      ) : (
+                        <p className="admin-post-detail-content">{resolvedSelectedPost.content || 'No post content available.'}</p>
+                      )}
+                    </div>
+
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">PHOTOS</p>
+                      <div className="admin-post-detail-stat">{getPostPhotoCount(resolvedSelectedPost)} photos</div>
+                      {getPostImages(resolvedSelectedPost).length > 0 ? (
+                        <div className="admin-post-gallery">
+                          {getPostImages(resolvedSelectedPost).slice(0, 6).map((item, index) => (
+                            <img
+                              key={`${item.url}-${index}`}
+                              src={resolveApiUrl(item.url.replace(/^\/api(?=\/)/, ''))}
+                              alt={`post attachment ${index + 1}`}
+                              className="admin-post-gallery-image"
+                              onError={(event) => { event.currentTarget.style.display = 'none' }}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="admin-post-detail-empty">No photos attached.</p>
+                      )}
+                    </div>
+
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">FILES</p>
+                      <div className="admin-post-detail-stat">{getPostFileCount(resolvedSelectedPost)} files</div>
+                      {getPostFiles(resolvedSelectedPost).length > 0 ? (
+                        <ul className="admin-post-detail-listing">
+                          {getPostFiles(resolvedSelectedPost).map((item, index) => (
+                            <li key={`${item.url}-${index}`}>
+                              <span>{item.name || item.url.split('/').filter(Boolean).pop() || 'file'}</span>
+                              <small>{item.type || 'file'}{item.size ? ` • ${(item.size / 1024).toFixed(1)} KB` : ''}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="admin-post-detail-empty">No files attached.</p>
+                      )}
+                    </div>
+
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">COMMENTS</p>
+                      <div className="admin-post-detail-stat">{getPostCommentCount(resolvedSelectedPost)} comments</div>
+                      {getPostComments(resolvedSelectedPost).length > 0 ? (
+                        <ul className="admin-post-detail-listing admin-post-comments">
+                          {getPostComments(resolvedSelectedPost).map((comment, index) => (
+                            <li key={comment.id || `${resolvedSelectedPost.id}-comment-${index}`}>
+                              <div className="admin-comment-header">
+                                <strong>{comment.username}</strong>
+                                {user?.role === 'admin' && comment.id && (
+                                  <button type="button" className="admin-delete-btn admin-inline-delete" onClick={() => handleDeleteComment(comment.id)}>Delete</button>
+                                )}
+                              </div>
+                              <p>{comment.content}</p>
+                              <small>{comment.createdAt ? new Date(comment.createdAt).toLocaleString() : 'Timestamp unavailable'}{comment.replies > 0 ? ` • ${comment.replies} replies` : ''}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="admin-post-detail-empty">No comments on this post.</p>
+                      )}
+                    </div>
+
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">REACTIONS</p>
+                      <div className="admin-post-detail-stat">{getPostReactionCount(resolvedSelectedPost)} reactions</div>
+                      {Array.isArray(resolvedSelectedPost.likedBy) && resolvedSelectedPost.likedBy.length > 0 ? (
+                        <ul className="admin-post-detail-listing">
+                          {resolvedSelectedPost.likedBy.map((reaction, index) => (
+                            <li key={`${reaction.userId || reaction.username || 'reaction'}-${index}`}>
+                              <span>{reaction.username || reaction.userId || 'User'}</span>
+                              <small>{reaction.type || 'liked'}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="admin-post-detail-empty">No reactions recorded.</p>
+                      )}
+                    </div>
+
+                    <div className="admin-post-detail-card">
+                      <p className="admin-eyebrow">REPORTS</p>
+                      <div className="admin-post-detail-stat">{getSelectedPostReports(resolvedSelectedPost.id).length} reports</div>
+                      {getSelectedPostReports(resolvedSelectedPost.id).length > 0 ? (
+                        <ul className="admin-post-detail-listing">
+                          {getSelectedPostReports(resolvedSelectedPost.id).map((report) => (
+                            <li key={report.id}>
+                              <strong>{report.type || 'Report'}</strong>
+                              <p>{report.details || report.target || 'No details provided.'}</p>
+                              <small>{report.status || 'Open'} • {report.createdAt ? new Date(report.createdAt).toLocaleString() : 'Timestamp unavailable'}</small>
+                            </li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <p className="admin-post-detail-empty">No reports for this post.</p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="admin-post-detail-actions">
+                    <button type="button" className="admin-more-actions-btn" onClick={() => handleEditPost(resolvedSelectedPost)}>{editingPostId === resolvedSelectedPost.id ? 'Editing…' : 'Edit post'}</button>
+                    <button type="button" className="admin-reset-btn" onClick={() => handleToggleSuspend(resolvedSelectedPost)}>{resolvedSelectedPost.suspended ? 'Unsuspend post' : 'Suspend post'}</button>
+                    <button type="button" className="admin-delete-btn" onClick={() => handleDeletePost(resolvedSelectedPost)}>Delete post</button>
+                  </div>
+                </>
+              )}
+            </div>
+          </section>
+        )
       case 'posts':
         return (
           <section id="posts" className="admin-page-accounts">
@@ -1138,8 +1509,9 @@ export default function Admin() {
             </div>
 
             {loadingPosts && <LoadingState label="Loading posts" compact />}
+            {postsLoadError && <p className="error-text" role="alert">{postsLoadError}</p>}
 
-            {!loadingPosts && postsList.length === 0 && (
+            {!loadingPosts && !postsLoadError && postsList.length === 0 && (
               <p>No posts found.</p>
             )}
 
@@ -1151,24 +1523,74 @@ export default function Admin() {
                   if (postsFilter === 'page') return p.source === 'page'
                   if (postsFilter === 'suspended') return p.suspended
                   return true
-                }).map((post) => (
-                  <div key={post.id} className="admin-post-row">
-                    <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                        <strong>{post.source === 'page' ? (post.pageName || post.author) : post.author} <small>({post.authorType === 'page' ? 'Page' : 'User'})</small></strong>
-                        <small>{post.createdAt ? new Date(post.createdAt).toLocaleString() : ''}</small>
+                }).map((post) => {
+                  const photoCount = getPostPhotoCount(post)
+                  const fileCount = getPostFileCount(post)
+                  const commentCount = getPostCommentCount(post)
+                  const reactionCount = getPostReactionCount(post)
+                  const reportCount = getPostReportCount(post.id)
+
+                  return (
+                    <div key={post.id} className="admin-post-row">
+                      <div className="admin-post-main">
+                        <div className="admin-post-header-row">
+                          <strong>{post.source === 'page' ? (post.pageName || post.author) : post.author} <small>({post.authorType === 'page' ? 'Page' : 'User'})</small></strong>
+                          <small>{post.createdAt ? new Date(post.createdAt).toLocaleString() : 'Timestamp unavailable'}</small>
+                        </div>
+
+                        <div className="admin-post-meta">
+                          <span>Post ID: {post.id}</span>
+                          <span>Author ID: {post.userId || 'Unavailable'}</span>
+                          <span>Status: {post.suspended ? 'Suspended' : 'Active'}</span>
+                        </div>
+
+                        <p className="admin-post-content">{post.content || 'No post content available.'}</p>
+
+                        {post.image ? (
+                          <img
+                            src={resolveApiUrl(post.image.replace(/^\/api(?=\/)/, ''))}
+                            alt="post"
+                            className="admin-post-image"
+                            onError={(event) => { event.currentTarget.style.display = 'none' }}
+                          />
+                        ) : null}
+
+                        <div className="admin-post-stats-grid" aria-label="Post management metadata">
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Photos</span>
+                            <strong>{photoCount}</strong>
+                          </div>
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Files</span>
+                            <strong>{fileCount}</strong>
+                          </div>
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Comments</span>
+                            <strong>{commentCount}</strong>
+                          </div>
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Reactions</span>
+                            <strong>{reactionCount}</strong>
+                          </div>
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Reports</span>
+                            <strong>{reportCount === 'Unavailable' ? 'Unavailable' : reportCount}</strong>
+                          </div>
+                          <div className="admin-post-stat">
+                            <span className="admin-post-stat-label">Visibility</span>
+                            <strong>{post.visibility || 'public'}</strong>
+                          </div>
+                        </div>
                       </div>
-                      <small>Post ID: {post.id} · Author ID: {post.userId}</small>
-                      <p style={{ marginTop: '6px' }}>{post.content}</p>
-                      {post.image ? <img src={resolveApiUrl(post.image.replace(/^\/api(?=\/)/, ''))} alt="post" style={{ maxWidth: '240px', marginTop: '6px', objectFit: 'cover' }} onError={(event) => { event.currentTarget.style.display = 'none' }} /> : null}
-                      <small>Reactions: {Math.max(Number(post.likes || 0), Array.isArray(post.likedBy) ? post.likedBy.length : 0)} · Comments: {Array.isArray(post.comments) ? post.comments.length : Number(post.comments || 0)} · Shares: {Number(post.shares ?? post.reposts ?? 0)} · Visibility: {post.visibility || 'public'}</small>
+
+                      <div className="admin-post-actions">
+                        <button type="button" className="admin-more-actions-btn" onClick={() => openPostDetails(post)}>View Details</button>
+                        <button type="button" className="admin-delete-btn" onClick={() => handleDeletePost(post)}>Delete</button>
+                        <button type="button" className="admin-reset-btn" onClick={() => handleToggleSuspend(post)}>{post.suspended ? 'Unsuspend' : 'Suspend'}</button>
+                      </div>
                     </div>
-                    <div className="admin-post-actions">
-                      <button type="button" className="admin-delete-btn" onClick={() => handleDeletePost(post)}>Delete</button>
-                      <button type="button" className="admin-reset-btn" onClick={() => handleToggleSuspend(post)}>{post.suspended ? 'Unsuspend' : 'Suspend'}</button>
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             )}
           </section>

@@ -658,6 +658,36 @@ router.delete('/posts/:id', authMiddleware, async (req, res, next) => {
   }
 })
 
+router.delete('/posts/:postId/comments/:commentId', authMiddleware, requireRole('admin'), async (req, res) => {
+  const { postId, commentId } = req.params || {}
+  const [post] = await listSocialPostsFromMongo({ id: String(postId), includeSuspended: true })
+  if (!post) return res.status(404).json({ message: 'Post not found' })
+
+  if (!Array.isArray(post.comments)) {
+    return res.status(404).json({ message: 'Comment not found' })
+  }
+
+  const existingIndex = post.comments.findIndex((comment) => String(comment?.id) === String(commentId))
+  if (existingIndex === -1) {
+    return res.status(404).json({ message: 'Comment not found' })
+  }
+
+  const nextComments = post.comments.filter((comment) => String(comment?.id) !== String(commentId))
+  const updated = { ...post, comments: nextComments }
+  const persisted = updateSocialPostById(post.id, { comments: nextComments })
+  if (!persisted) {
+    return res.status(404).json({ message: 'Comment not found' })
+  }
+
+  try {
+    await persistSocialPost(updated)
+  } catch (error) {
+    console.warn('Admin comment delete persistence failed:', error.message)
+  }
+
+  return res.json({ message: 'Comment deleted', post: updated })
+})
+
 router.get('/reports', authMiddleware, requireRole('admin'), (req, res) => {
   res.json({ reports: listReports() });
 });
